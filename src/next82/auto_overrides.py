@@ -13,7 +13,12 @@ last playoff game day: his injury predates the season, so it's counted from his 
 game (playoffs included).
 
 A team-announced timeline in data/news_timelines.csv replaces the table's estimate
-(it's no longer an estimate). Manual rows in data/overrides.csv always win.
+(it's no longer an estimate). A manual row in data/overrides.csv wins over both,
+unless a news row was found after the manual row was added: then the news row wins
+and the manual row is the fallback if the news row goes away. Each player's most
+recently found news row is the one used. A news timeline whose window has passed
+(latest return, or earliest if there's no latest, before today) while the player
+is still out has expired: it's ignored, with a log line, until a newer one is found.
 
 The report only lists teams that are about to play, so a player's status comes from
 his team's most recent listing in the season's log. An automatic override clears
@@ -37,7 +42,8 @@ END_OF_LAST_SEASON_PATH = config.PROCESSED_DIR / f"injuries_end_of_season_before
 OVERDUE_WINDOW_DAYS = 14
 # Statuses on the end-of-season report that aren't injuries.
 NOT_AN_INJURY = ["rest", "not injury", "illness", "personal", "suspension"]
-NEWS_COLUMNS = ["player_id", "earliest_return", "latest_return", "note", "source_url", "date_found"]
+# date_found: when the row was added; source_date: when the source was published.
+NEWS_COLUMNS = ["player_id", "earliest_return", "latest_return", "note", "source_url", "date_found", "source_date"]
 
 
 def load_recovery(path=None) -> pd.DataFrame:
@@ -50,8 +56,8 @@ def load_news(path=None) -> pd.DataFrame:
     path = path or NEWS_PATH
     if not path.exists():
         return pd.DataFrame(columns=NEWS_COLUMNS)
-    df = pd.read_csv(path, dtype={"player_id": "Int64"})
-    for c in ("earliest_return", "latest_return", "date_found"):
+    df = pd.read_csv(path, dtype={"player_id": "Int64"}).reindex(columns=NEWS_COLUMNS)
+    for c in ("earliest_return", "latest_return", "date_found", "source_date"):
         df[c] = pd.to_datetime(df[c])
     return df
 
@@ -109,7 +115,7 @@ def build(log: pd.DataFrame | None, recovery: pd.DataFrame, news: pd.DataFrame, 
     if player_games is not None and len(player_games):
         dates = pd.to_datetime(player_games.GAME_DATE.astype(str).str[:10])
         played_after = dates.groupby(player_games.PLAYER_ID).max().to_dict()
-    news_by_id = {int(r.player_id): r for r in news.itertuples()} if len(news) else {}
+    news_by_id = latest_news(news)
     for r in current_listings(log).itertuples():
         if pd.isna(r.PLAYER_ID) or r.status != "Out":
             continue
@@ -120,6 +126,10 @@ def build(log: pd.DataFrame | None, recovery: pd.DataFrame, news: pd.DataFrame, 
             continue  # played again since the report: clears
         table = recovery_row(recovery, r.injury_type, r.body_part)
         news_row = news_by_id.get(pid)
+        if news_row is not None and expired(news_row, today):
+            lines.append(f"News timeline for {r.player_name} has expired (still listed Out); "
+                         + ("using the recovery-table estimate" if table is not None else "leaving it to the model"))
+            news_row = None
         if table is None and news_row is None:
             continue  # short-term or unknown types: the model handles those
         first_listed = log[(log.PLAYER_ID == r.PLAYER_ID) & (log.injury_type == r.injury_type)].report_day.min()
@@ -135,12 +145,12 @@ def build(log: pd.DataFrame | None, recovery: pd.DataFrame, news: pd.DataFrame, 
             estimated = True
             note = (f"{injuries.clean_reason(r.reason)} (NBA injury report, {r.report_day:%b %-d}). {table.basis} "
                     f"Counted from {start:%b %-d, %Y}"
-                    + (" (his last game; he was already out with it at the end of last season)."
+                    + (" (the last game played; already out with it at the end of last season)."
                        if pid in already_out else
-                       " (the later of his last game and his first listing with this injury)."))
-            # Still out past the typical recovery: he could be back any time.
+                       " (the later of the last game played and the first listing with this injury)."))
+            # Still out past the typical recovery: a return could come any time.
             if earliest < today:
-                note += " He's past the typical recovery time, so a return could come any day."
+                note += " That's past the typical recovery time, so a return could come any day."
                 earliest = today
                 if pd.notna(latest) and latest < today:
                     latest = today + pd.Timedelta(days=OVERDUE_WINDOW_DAYS)
@@ -157,14 +167,57 @@ def build(log: pd.DataFrame | None, recovery: pd.DataFrame, news: pd.DataFrame, 
     return pd.DataFrame(rows, columns=[*COLUMNS, "kind"]), lines
 
 
-def current(manual: pd.DataFrame, today: pd.Timestamp) -> tuple[pd.DataFrame, list[str]]:
-    """Automatic and news overrides for today, from the saved injury log and game logs."""
+def expired(n, today: pd.Timestamp) -> bool:
+    """A news timeline whose window has passed (the player is still out if we're asking)."""
+    end = n.latest_return if pd.notna(n.latest_return) else n.earliest_return
+    return pd.notna(end) and end < today
+
+
+def latest_news(news: pd.DataFrame) -> dict:
+    """Each player's most recently found news row, by player_id."""
+    if not len(news):
+        return {}
+    news = news.dropna(subset=["player_id"]).sort_values("date_found", kind="stable")
+    return {int(r.player_id): r for r in news.itertuples()}
+
+
+def news_over_manual(news: pd.DataFrame, manual: pd.DataFrame, today: pd.Timestamp) -> tuple[pd.DataFrame, list[str]]:
+    """News rows found after a player's manual row was added, as override rows that
+    replace it (kind 'news'; the manual row's source stays as the second link)."""
+    rows, lines = [], []
+    by_id = latest_news(news)
+    for m in manual.itertuples():
+        n = by_id.get(int(m.player_id))
+        if n is None or pd.isna(n.date_found) or (pd.notna(m.date_added) and n.date_found <= m.date_added):
+            continue
+        if expired(n, today):
+            lines.append(f"News timeline for {m.player_name} has expired; using the manual row")
+            continue
+        rows.append({
+            "player_id": int(m.player_id), "player_name": m.player_name, "status": "Out",
+            "earliest_return": n.earliest_return, "latest_return": n.latest_return, "estimated": False,
+            "note": f"Team timeline: {n.note}", "source_url": n.source_url, "source_url_2": m.source_url,
+            "date_added": n.date_found, "review_by": pd.NaT, "kind": "news",
+        })
+        lines.append(f"News override (replaces manual row from {m.date_added:%Y-%m-%d}): {m.player_name}, back no earlier "
+                     f"than {n.earliest_return:%Y-%m-%d}" + (f", by {n.latest_return:%Y-%m-%d}" if pd.notna(n.latest_return)
+                                                              else ", no latest return") + f" ({n.source_url})")
+    return pd.DataFrame(rows, columns=[*COLUMNS, "kind"]), lines
+
+
+def current(manual: pd.DataFrame, today: pd.Timestamp) -> tuple[pd.DataFrame, pd.DataFrame, list[str]]:
+    """Today's overrides: the manual rows still in use, plus news and automatic rows
+    (from the saved injury log and game logs), and log lines."""
+    news = load_news()
+    from_news, lines = news_over_manual(news, manual, today)
+    manual_used = manual[~manual.player_id.isin(from_news.player_id)]
     logs = data.saved_season_logs()
     before = pd.read_parquet(LAST_GAME_PATH) if LAST_GAME_PATH.exists() else None
     player_games = logs[0] if logs is not None else None
     end = pd.read_parquet(END_OF_LAST_SEASON_PATH) if END_OF_LAST_SEASON_PATH.exists() else None
-    return build(injuries.saved_log(), load_recovery(), load_news(), manual.player_id, last_games(player_games, before),
-                 player_games, today, end)
+    automatic, auto_lines = build(injuries.saved_log(), load_recovery(), news, manual.player_id,
+                                  last_games(player_games, before), player_games, today, end)
+    return manual_used, pd.concat([from_news, automatic], ignore_index=True), lines + auto_lines
 
 
 def playoff_games(season: str) -> tuple[pd.DataFrame, pd.DataFrame]:

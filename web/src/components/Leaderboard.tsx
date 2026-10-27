@@ -1,25 +1,25 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router'
-import { playedText, soFarText } from '../data'
-import TierPill from './TierPill'
+import { isInjured, soFarText } from '../data'
+import InjuredBadge from './InjuredBadge'
+import Tip from './Tip'
+import { GLOSSARY } from '../glossary'
 import type { PlayerSummary } from '../types'
 
 const PAGE = 50
 
 /**
- * Forecasts, highest first. Comeback players show their if-healthy number with a
- * dashed bar and their setback chance, so they aren't mistaken for regular forecasts.
+ * Players in the order given: expected games (games so far + the updated forecast)
+ * with their likely range, and the frozen preseason forecast beside it. Comeback
+ * players' preseason number is the if-healthy one, with a dashed bar and their
+ * setback chance, so it isn't mistaken for a regular forecast.
  */
 export default function Leaderboard({
   players,
-  dataThrough,
-  forecastSeason,
   seasonStarted,
   showTeam = true,
 }: {
   players: PlayerSummary[]
-  dataThrough: string
-  forecastSeason: string
   seasonStarted: boolean
   showTeam?: boolean
 }) {
@@ -34,11 +34,16 @@ export default function Leaderboard({
           <tr className="border-b border-line text-left text-xs tracking-wide text-faint uppercase">
             <th className="w-10 py-3 pl-4 font-medium">#</th>
             <th className="py-3 pr-3 font-medium">Player</th>
-            <th className="hidden py-3 pr-3 font-medium sm:table-cell">Age</th>
-            <th className="hidden py-3 pr-3 font-medium md:table-cell">Played {dataThrough}</th>
-            {seasonStarted && <th className="hidden py-3 pr-3 font-medium lg:table-cell">{forecastSeason} so far</th>}
-            <th className="py-3 pr-3 font-medium">Preseason</th>
-            {seasonStarted && <th className="hidden py-3 pr-4 font-medium sm:table-cell">Updated</th>}
+            <th className="hidden py-3 pr-3 font-medium lg:table-cell">Age</th>
+            {seasonStarted && <th className="hidden py-3 pr-3 font-medium md:table-cell">Played so far</th>}
+            {seasonStarted && (
+              <th className="py-3 pr-3 font-medium">
+                <Tip tip={GLOSSARY.expected}>Expected games</Tip>
+              </th>
+            )}
+            <th className={`py-3 pr-4 font-medium ${seasonStarted ? 'hidden sm:table-cell' : ''}`}>
+              <Tip tip={GLOSSARY.preseason}>Preseason forecast</Tip>
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -58,38 +63,36 @@ export default function Leaderboard({
                   {p.name}
                 </Link>
                 {showTeam && <span className="ml-2 text-xs text-faint">{p.team ?? 'No team'}</span>}
-                {p.tier && (
-                  <span className="ml-2 hidden align-middle lg:inline">
-                    <TierPill tier={p.tier} />
+                {isInjured(p) && (
+                  <span className="ml-2">
+                    <InjuredBadge p={p} />
                   </span>
                 )}
               </td>
-              <td className="tabular hidden py-3 pr-3 text-muted sm:table-cell">{p.age}</td>
-              <td className="tabular hidden py-3 pr-3 text-muted md:table-cell">
-                {p.comeback ? 'Missed season' : playedText(p.games, p.seasonGames)}
-              </td>
+              <td className="tabular hidden py-3 pr-3 text-muted lg:table-cell">{p.age}</td>
               {seasonStarted && (
-                <td className="tabular hidden py-3 pr-3 text-muted lg:table-cell">{soFarText(p) ?? '—'}</td>
+                <td className="tabular hidden py-3 pr-3 text-muted md:table-cell">{soFarText(p) ?? '—'}</td>
               )}
-              <td className="py-3 pr-3">
-                <ForecastCell player={p} />
-              </td>
               {seasonStarted && (
-                <td className="tabular hidden py-3 pr-4 sm:table-cell">
-                  {p.override?.indefinite ? (
-                    <span title={p.override.note} className="text-xs font-semibold text-risky">
-                      Out indefinitely{p.override.needsReview && ' · needs review'}
-                    </span>
-                  ) : p.updated === null ? (
+                <td className="tabular py-3 pr-3">
+                  {p.updated === null ? (
                     <span className="text-xs text-faint">{p.notOnRoster ? 'Not on a roster' : '—'}</span>
                   ) : (
                     <>
                       <span className="font-display text-lg font-bold">{Math.round(p.updated)}</span>
+                      {p.updatedLow !== null && p.updatedHigh !== null && (
+                        <span className="ml-1.5 hidden text-xs text-faint sm:inline">
+                          {p.updatedLow}–{p.updatedHigh}
+                        </span>
+                      )}
                       <UpdatedChange player={p} />
                     </>
                   )}
                 </td>
               )}
+              <td className={`py-3 pr-4 ${seasonStarted ? 'hidden sm:table-cell' : ''}`}>
+                <ForecastCell player={p} compact={seasonStarted} />
+              </td>
             </tr>
           ))}
         </tbody>
@@ -121,11 +124,11 @@ function UpdatedChange({ player: p }: { player: PlayerSummary }) {
   )
 }
 
-function ForecastCell({ player: p }: { player: PlayerSummary }) {
+function ForecastCell({ player: p, compact }: { player: PlayerSummary; compact: boolean }) {
   const pct = `${(p.shown / 82) * 100}%`
   return (
-    <div className="flex items-center gap-3">
-      <div className="relative hidden h-2 w-24 shrink-0 rounded-full bg-surface-2 sm:block">
+    <div className={`flex items-center gap-3 ${compact ? 'text-muted' : ''}`}>
+      <div className={`relative hidden h-2 w-24 shrink-0 rounded-full bg-surface-2 ${compact ? 'lg:block' : 'sm:block'}`}>
         <div
           className={`absolute inset-y-0 left-0 rounded-full ${p.comeback ? 'border border-dashed border-accent bg-accent/15' : 'bg-accent'}`}
           style={{ width: pct }}

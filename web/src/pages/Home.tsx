@@ -1,8 +1,8 @@
 import { useMemo } from 'react'
-import { useSearchParams } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
 import Leaderboard from '../components/Leaderboard'
 import SearchBox from '../components/SearchBox'
-import { baselineText, shortDate } from '../data'
+import { baselineText, isInjured, shortDate } from '../data'
 import type { Index } from '../types'
 
 export default function Home({ index }: { index: Index }) {
@@ -10,14 +10,22 @@ export default function Home({ index }: { index: Index }) {
   const [params, setParams] = useSearchParams()
   const teamAbbr = params.get('team')?.toUpperCase() ?? ''
   const team = teams.find((t) => t.abbr === teamAbbr)
-  const rows = useMemo(() => (team ? players.filter((p) => p.team === team.abbr) : players), [players, team])
+  // Highest expected games first (the updated forecast once the season is on).
+  const rows = useMemo(() => {
+    const list = team ? players.filter((p) => p.team === team.abbr) : players
+    const key = (p: (typeof players)[number]) => (meta.seasonStarted ? (p.updated ?? -1) : p.shown)
+    return [...list].sort((a, b) => key(b) - key(a))
+  }, [players, team, meta.seasonStarted])
+  const injuredCount = useMemo(() => players.filter(isInjured).length, [players])
 
   return (
     <>
-      <section className="pt-10 pb-8 sm:pt-16">
+      <section className="pt-10 pb-8 sm:pt-14">
         <p className="text-sm font-semibold tracking-widest text-accent uppercase">
-          {meta.forecastSeason} season forecasts
-          {meta.seasonStarted && <span className="ml-2 text-muted">· season underway</span>}
+          {meta.forecastSeason} season
+          {meta.seasonStarted && meta.soFarThrough && (
+            <span className="ml-2 text-muted">· updated through {shortDate(meta.soFarThrough)}</span>
+          )}
         </p>
         <h1 className="mt-2 font-display text-5xl leading-[0.95] font-extrabold tracking-tight uppercase sm:text-7xl">
           How many games
@@ -25,30 +33,26 @@ export default function Home({ index }: { index: Index }) {
           will they play?
         </h1>
         <p className="mt-4 max-w-xl text-muted">
-          A machine-learning forecast of games played for every NBA player this season, made before opening night, with
-          the reasons behind each number.
-          {meta.seasonStarted && meta.soFarThrough && (
-            <> Games so far are updated through {shortDate(meta.soFarThrough)}.</>
-          )}
+          Every NBA player's expected games this season, updated daily with games played and injury news.
         </p>
-        <div className="mt-8 max-w-2xl">
-          <SearchBox players={players} autoFocus />
+
+        <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="rounded-2xl border border-accent/50 bg-surface p-4 sm:col-span-2 lg:col-span-1">
+            <h2 className="font-display text-xl font-bold uppercase">Look up a player</h2>
+            <p className="mt-0.5 mb-3 text-sm text-muted">Games expected, injuries and why.</p>
+            <SearchBox players={players} size="compact" autoFocus />
+          </div>
+          <Choice
+            to="/rankings"
+            title="Fantasy rankings"
+            text="Who's worth the most from here on, counting games they'll miss."
+          />
+          <Choice
+            to="/injured"
+            title="Who's injured"
+            text={`${injuredCount} players out with an injury, and when they're expected back.`}
+          />
         </div>
-        <dl className="mt-8 grid max-w-2xl gap-px overflow-hidden rounded-xl border border-line bg-line sm:grid-cols-3">
-          <Stat value={players.length.toString()} label="players forecast" />
-          <Stat
-            value={meta.accuracy.modelMae.toFixed(1)}
-            unit="games"
-            label="our average miss"
-            note={`Half our forecasts land within ${Math.round(meta.accuracy.modelMedianError)} games`}
-            accent
-          />
-          <Stat
-            value={meta.accuracy.bestBaselineMae.toFixed(1)}
-            unit="games"
-            label={`average miss ${baselineText(meta.accuracy.bestBaseline)}`}
-          />
-        </dl>
       </section>
 
       <section className="pb-16">
@@ -73,8 +77,6 @@ export default function Home({ index }: { index: Index }) {
         <Leaderboard
           key={team?.abbr ?? 'all'}
           players={rows}
-          dataThrough={meta.dataThrough}
-          forecastSeason={meta.forecastSeason}
           seasonStarted={meta.seasonStarted}
           showTeam={!team}
         />
@@ -84,20 +86,25 @@ export default function Home({ index }: { index: Index }) {
             {meta.dataThrough}, so rookies aren't included.
           </p>
         )}
+        <p className="mt-6 text-sm text-faint">
+          How good are these? Tested on past seasons, the preseason forecasts missed by {meta.accuracy.modelMae} games on
+          average, against {meta.accuracy.bestBaselineMae} {baselineText(meta.accuracy.bestBaseline)}.{' '}
+          <Link to="/accuracy" className="text-accent">
+            See how accurate it is →
+          </Link>
+        </p>
       </section>
     </>
   )
 }
 
-function Stat({ value, unit, label, note, accent = false }: { value: string; unit?: string; label: string; note?: string; accent?: boolean }) {
+function Choice({ to, title, text }: { to: string; title: string; text: string }) {
   return (
-    <div className="flex flex-col bg-surface px-4 py-4">
-      <dd className="flex items-baseline gap-1.5">
-        <span className={`tabular font-display text-3xl font-bold ${accent ? 'text-accent' : ''}`}>{value}</span>
-        {unit && <span className="text-sm text-muted">{unit}</span>}
-      </dd>
-      <dt className="order-last mt-0.5 text-sm text-ink">{label}</dt>
-      {note && <dd className="order-last mt-1 text-xs text-faint">{note}</dd>}
-    </div>
+    <Link to={to} className="group rounded-2xl border border-line bg-surface p-4 transition hover:border-accent/60 hover:bg-surface-2">
+      <h2 className="font-display text-xl font-bold uppercase">
+        {title} <span className="text-accent transition group-hover:translate-x-0.5">→</span>
+      </h2>
+      <p className="mt-0.5 text-sm text-muted">{text}</p>
+    </Link>
   )
 }

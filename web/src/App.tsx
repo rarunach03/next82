@@ -1,10 +1,11 @@
-import { lazy, Suspense, useEffect } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { BrowserRouter, Link, Route, Routes, useLocation } from 'react-router'
 import SearchBox from './components/SearchBox'
-import { baselineText, latestFinishedSeason, shortDate, useIndex } from './data'
+import { latestFinishedSeason, shortDate, useIndex } from './data'
 import About from './pages/About'
 import Accuracy from './pages/Accuracy'
 import Home from './pages/Home'
+import Injured from './pages/Injured'
 import Rankings from './pages/Rankings'
 import Stash from './pages/Stash'
 import Trade from './pages/Trade'
@@ -35,42 +36,41 @@ function Shell() {
           <Link to="/" className="font-display text-2xl font-extrabold tracking-tight uppercase">
             Next<span className="text-accent">82</span>
           </Link>
-          <nav className="ml-auto flex items-center gap-2.5 sm:gap-4">
+          <nav className="ml-auto flex items-center gap-1 sm:gap-2">
             {index && pathname !== '/' && (
-              <div className="hidden w-64 sm:block">
+              <div className="mr-2 hidden w-56 md:block">
                 <SearchBox players={index.players} size="compact" />
               </div>
             )}
-            <Link
-              to="/rankings"
-              className={`text-xs font-medium transition hover:text-ink sm:text-sm ${pathname === '/rankings' ? 'text-ink' : 'text-muted'}`}
-            >
-              Rankings
-            </Link>
-            <Link
-              to="/trade"
-              className={`text-xs font-medium transition hover:text-ink sm:text-sm ${pathname === '/trade' ? 'text-ink' : 'text-muted'}`}
-            >
-              Trade
-            </Link>
-            <Link
-              to="/stash"
-              className={`text-xs font-medium transition hover:text-ink sm:text-sm ${pathname === '/stash' ? 'text-ink' : 'text-muted'}`}
-            >
-              Stash
-            </Link>
-            <Link
-              to="/accuracy"
-              className={`text-xs font-medium transition hover:text-ink sm:text-sm ${pathname === '/accuracy' ? 'text-ink' : 'text-muted'}`}
-            >
-              Accuracy
-            </Link>
-            <Link
-              to="/about"
-              className={`text-xs font-medium transition hover:text-ink sm:text-sm ${pathname === '/about' ? 'text-ink' : 'text-muted'}`}
-            >
-              About
-            </Link>
+            <NavMenu
+              key={pathname}
+              label="Players"
+              pathname={pathname}
+              items={[
+                { to: '/', label: 'All players' },
+                { to: '/injured', label: "Who's injured" },
+              ]}
+            />
+            <NavMenu
+              key={pathname}
+              label="Fantasy"
+              pathname={pathname}
+              items={[
+                { to: '/rankings', label: 'Rankings' },
+                { to: '/trade', label: 'Trade analyzer' },
+                { to: '/stash', label: 'Who to stash' },
+              ]}
+            />
+            <NavMenu
+              key={pathname}
+              label="How it works"
+              pathname={pathname}
+              align="right"
+              items={[
+                { to: '/accuracy', label: 'How accurate is it?' },
+                { to: '/about', label: 'About the forecasts' },
+              ]}
+            />
           </nav>
         </div>
       </header>
@@ -91,6 +91,7 @@ function Shell() {
                   </Suspense>
                 }
               />
+              <Route path="/injured" element={<Injured index={index} />} />
               <Route path="/rankings" element={<Rankings meta={index.meta} teams={index.teams} />} />
               <Route path="/trade" element={<Trade />} />
               <Route path="/stash" element={<Stash />} />
@@ -103,6 +104,65 @@ function Shell() {
       </main>
 
       {index && <Footer index={index} />}
+    </div>
+  )
+}
+
+/** A header menu: tap or click to open; closes on Escape or a tap elsewhere, and on
+ * navigation (the parent keys it by path, so it starts closed on each page). */
+function NavMenu({
+  label,
+  items,
+  pathname,
+  align = 'left',
+}: {
+  label: string
+  items: { to: string; label: string }[]
+  pathname: string
+  align?: 'left' | 'right'
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  const active = items.some((i) => i.to === pathname)
+  useEffect(() => {
+    if (!open) return
+    const outside = (e: PointerEvent) => !ref.current?.contains(e.target as Node) && setOpen(false)
+    const escape = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false)
+    window.addEventListener('pointerdown', outside)
+    window.addEventListener('keydown', escape)
+    return () => {
+      window.removeEventListener('pointerdown', outside)
+      window.removeEventListener('keydown', escape)
+    }
+  }, [open])
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        aria-haspopup="true"
+        className={`flex items-center gap-1 rounded-md px-2 py-1.5 text-sm font-medium whitespace-nowrap transition hover:text-ink ${active ? 'text-ink' : 'text-muted'}`}
+      >
+        {label}
+        <span aria-hidden className={`text-[10px] transition ${open ? 'rotate-180' : ''}`}>
+          ▾
+        </span>
+      </button>
+      {open && (
+        <div
+          className={`absolute top-full z-40 mt-1 min-w-44 overflow-hidden rounded-xl border border-line bg-surface py-1 shadow-xl ${align === 'right' ? 'right-0' : 'left-0'}`}
+        >
+          {items.map((i) => (
+            <Link
+              key={i.to}
+              to={i.to}
+              className={`block px-4 py-2.5 text-sm transition hover:bg-surface-2 ${i.to === pathname ? 'text-accent' : 'text-ink'}`}
+            >
+              {i.label}
+            </Link>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -128,15 +188,12 @@ function Footer({ index }: { index: Index }) {
           Data from NBA.com. Unofficial, non-commercial student project, not affiliated with the NBA or its teams.
         </p>
         <p>
-          Forecasts use NBA regular seasons from 1996-97 through {meta.dataThrough}
-          {rosters && <> · Teams as of {rosters}</>}
-          {meta.seasonStarted && meta.soFarThrough && <> · {meta.forecastSeason} games through {shortDate(meta.soFarThrough)}</>}.
-        </p>
-        <p>
-          Forecasts were made before the {meta.forecastSeason} season and stay fixed, so they can be checked against what
-          actually happens. Tested on {meta.accuracy.testSeasons.join(' and ')}, seasons the model never saw: our average miss
-          was {meta.accuracy.modelMae} games (half within {Math.round(meta.accuracy.modelMedianError)}), vs.{' '}
-          {meta.accuracy.bestBaselineMae} {baselineText(meta.accuracy.bestBaseline)}.
+          {meta.seasonStarted && meta.soFarThrough && <>Games through {shortDate(meta.soFarThrough)} · </>}
+          {rosters && <>Teams as of {rosters} · </>}
+          Built from NBA seasons since 1996-97 ·{' '}
+          <Link to="/accuracy" className="text-muted underline-offset-2 hover:underline">
+            How accurate is it?
+          </Link>
         </p>
       </div>
     </footer>

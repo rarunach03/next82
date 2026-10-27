@@ -37,7 +37,8 @@ export default function HistoryChart({
         <BarChart data={data} margin={{ top: 16, right: 4, left: -24, bottom: 0 }}>
           <XAxis
             dataKey="season"
-            tickFormatter={(s: string) => `'${s.slice(2, 4)}`}
+            // "2025-26" -> "25-26": fans name seasons by both years, or the year they end.
+            tickFormatter={(s: string) => s.slice(2)}
             tick={{ fill: 'var(--color-faint)', fontSize: 11 }}
             axisLine={{ stroke: 'var(--color-line)' }}
             tickLine={false}
@@ -63,7 +64,7 @@ export default function HistoryChart({
               )
             }}
           />
-          <Bar dataKey="games" radius={[3, 3, 0, 0]} minPointSize={2}>
+          <Bar dataKey="games" radius={[3, 3, 0, 0]} minPointSize={2} isAnimationActive={false}>
             {data.map((d) => (
               <Cell key={d.season} fill={COLORS[d.kind]} />
             ))}

@@ -1,5 +1,8 @@
 import { useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
+import InjuredBadge from '../components/InjuredBadge'
+import Tip from '../components/Tip'
+import { GLOSSARY } from '../glossary'
 import { fantasyValue, plain, useFantasy } from '../data'
 import type { Fantasy, FantasyFormat, FantasyPlayer } from '../types'
 
@@ -64,13 +67,16 @@ export default function Trade() {
       <p className="text-sm font-semibold tracking-widest text-accent uppercase">Fantasy</p>
       <h1 className="mt-2 font-display text-5xl leading-none font-extrabold tracking-tight uppercase">Trade analyzer</h1>
       <p className="mt-4 max-w-2xl text-muted">
-        Compare the rest-of-season value of two sides: per-game production above replacement times the games each player
-        is forecast to play from here on. Pick the players you'd give and the players you'd get; the link updates so you
-        can share the trade.
+        Compare what two sides of a trade are worth from here on: each player's production per game{' '}
+        <Tip tip={GLOSSARY.aboveReplacement(fantasy.poolSize)}>above a free-agent pickup</Tip>, times the games they're
+        expected to play. Pick the players you'd give and the players you'd get; the link updates so you can share the
+        trade.
       </p>
 
       <div className="mt-6" role="radiogroup" aria-label="Scoring">
-        <div className="mb-1 text-xs text-faint">Scoring</div>
+        <div className="mb-1 text-xs text-faint">
+          Scoring (<Tip tip={GLOSSARY.cat9}>what's 9-cat?</Tip>)
+        </div>
         <div className="inline-flex rounded-lg border border-line bg-surface p-0.5">
           {FORMATS.map((f) => (
             <button
@@ -107,7 +113,7 @@ export default function Trade() {
             )}
           </p>
           <p className="mt-2 text-sm text-faint">
-            Likely ranges: you give {fmt(total(a, 'low'))}–{fmt(total(a, 'high'))}, you get {fmt(total(b, 'low'))}–
+            <Tip tip={GLOSSARY.likelyRange}>Likely ranges</Tip>: you give {fmt(total(a, 'low'))}–{fmt(total(a, 'high'))}, you get {fmt(total(b, 'low'))}–
             {fmt(total(b, 'high'))}. Ranges come from each player's likely games and add up the bad and good cases, so
             they're on the wide side. Roster spots aren't counted: a 2-for-1 also frees a spot for a free agent.
           </p>
@@ -191,7 +197,9 @@ function Side({
             <div className="min-w-0">
               <div className="font-medium">
                 {l.p.name} <span className="text-xs text-faint">{l.p.team}</span>
-                {l.p.override && <span className="ml-1 text-xs font-semibold text-risky">· out</span>}
+                <span className="ml-1">
+                  <InjuredBadge p={l.p} />
+                </span>
               </div>
               <div className="text-xs text-muted">
                 {Math.round(l.p.restGames)} games left

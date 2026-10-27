@@ -27,6 +27,8 @@ export interface Meta {
   soFarThrough: string | null
   /** Date of the latest games used by the updated forecast. */
   updatedAsOf: string | null
+  /** Last day of this regular season (from the schedule). */
+  regularSeasonEnd: string | null
   generatedAt: string
   games: number
   setbackGames: number
@@ -57,6 +59,16 @@ export interface Override {
   indefinite: boolean
   /** Past its review-by date. */
   needsReview: boolean
+}
+
+/** Currently out, and why: listed Out with an injury on the team's latest report, a long
+ * absence with no report, or the kind of injury adjustment. */
+export interface OutInfo {
+  reason: 'injury report' | 'long absence, no report' | 'manual' | 'automatic' | 'news'
+  status: string | null
+  injury: string | null
+  reportUrl: string | null
+  gamesAfterReturn: number | null
 }
 
 export interface Team {
@@ -107,6 +119,7 @@ export interface PlayerSummary {
   /** Not on any current roster. */
   notOnRoster: boolean
   override: Override | null
+  out: OutInfo | null
   /** Back-to-back second nights the team has left, and the player's (shrunk) rest rate on them. */
   b2bLeft: number | null
   b2bRate: number | null
@@ -173,13 +186,7 @@ export interface FantasyPlayer {
   /** Updated forecast for the whole season (played so far + rest). */
   seasonGames: number
   /** Currently out, and why (for the stash list). */
-  out: {
-    reason: 'injury report' | 'long absence, no report' | 'manual' | 'automatic' | 'news'
-    status: string | null
-    injury: string | null
-    reportUrl: string | null
-    gamesAfterReturn: number | null
-  } | null
+  out: OutInfo | null
   /** Per-game value: ESPN and Yahoo points, and total 9-category z-score. */
   perGame: Record<FantasyFormat, number>
   cats: Record<string, number>

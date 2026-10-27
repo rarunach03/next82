@@ -30,7 +30,7 @@ def _build(log, last_game=None, news=NO_NEWS, manual=(), player_games=None):
 
 
 def test_serious_injury_gets_an_estimate():
-    # Hurt in his last game (Oct 29), listed the next day: counted from the listing.
+    # Hurt in the last game played (Oct 29), listed the next day: counted from the listing.
     log = _log([{"PLAYER_ID": 1, "team": "A", "status": "Out", "injury_type": "ACL", "body_part": "acl tear",
                  "report_day": "2026-10-30"}])
     r = _build(log, last_game={1: pd.Timestamp("2026-10-29")}).loc[1]
@@ -158,3 +158,40 @@ def test_body_part_alternatives_and_first_matching_row_wins():
     assert auto_overrides.recovery_row(table, "fracture", "tibia and fibula fracture").earliest_days == 230
     assert auto_overrides.recovery_row(table, "fracture", "fibula fracture").earliest_days == 39
     assert auto_overrides.recovery_row(table, "fracture", None) is None
+
+
+def _manual(added):
+    return pd.DataFrame([{"player_id": 1, "player_name": "Player 1", "source_url": "https://manual/1",
+                          "date_added": pd.Timestamp(added)}])
+
+
+def test_news_found_after_a_manual_row_wins_and_manual_is_the_fallback():
+    news = pd.DataFrame([{"player_id": 1, "earliest_return": pd.Timestamp("2027-01-10"), "latest_return": pd.NaT,
+                          "note": "Out 10 weeks (ESPN, Oct 30)", "source_url": "https://news/1",
+                          "date_found": pd.Timestamp("2026-10-31"), "source_date": pd.Timestamp("2026-10-30")}])
+    rows, lines = auto_overrides.news_over_manual(news, _manual("2026-10-26"), TODAY)
+    r = rows.iloc[0]
+    assert r.kind == "news" and not r.estimated and r.earliest_return == pd.Timestamp("2027-01-10")
+    assert r.source_url == "https://news/1" and r.source_url_2 == "https://manual/1" and len(lines) == 1
+    # A manual row added after the news was found still wins.
+    assert auto_overrides.news_over_manual(news, _manual("2026-11-01"), TODAY)[0].empty
+    assert auto_overrides.news_over_manual(news.iloc[:0], _manual("2026-10-26"), TODAY)[0].empty
+
+
+def test_most_recently_found_news_row_is_used():
+    news = pd.DataFrame([
+        {"player_id": 1, "earliest_return": pd.Timestamp("2027-02-01"), "date_found": pd.Timestamp("2026-10-31")},
+        {"player_id": 1, "earliest_return": pd.Timestamp("2027-01-01"), "date_found": pd.Timestamp("2026-10-28")},
+    ])
+    assert auto_overrides.latest_news(news)[1].earliest_return == pd.Timestamp("2027-02-01")
+
+
+def test_expired_news_timeline_falls_back_to_the_estimate():
+    log = _log([{"PLAYER_ID": 1, "team": "A", "status": "Out", "injury_type": "fracture", "body_part": "foot fracture",
+                 "report_day": "2026-10-30"}])
+    stale = pd.DataFrame([{"player_id": 1, "earliest_return": pd.Timestamp("2026-10-15"),
+                           "latest_return": pd.Timestamp("2026-10-25"), "note": "Update in 3 months",
+                           "source_url": "https://news/1", "date_found": pd.Timestamp("2026-10-27")}])
+    rows, lines = auto_overrides.build(log, RECOVERY, stale, [], pd.Series({1: pd.Timestamp("2026-10-29")}), None, TODAY)
+    assert rows.iloc[0].kind == "automatic" and any("expired" in line for line in lines)
+    assert auto_overrides.news_over_manual(stale, _manual("2026-10-26"), TODAY)[0].empty

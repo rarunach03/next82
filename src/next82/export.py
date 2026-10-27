@@ -83,7 +83,9 @@ def out_info(forecasts: pd.DataFrame, team_ids: pd.Series, today: pd.Timestamp) 
     schedule = data.saved_schedule()
     for i, r in forecasts.iterrows():
         pid = r.PLAYER_ID
-        listed = listing is not None and pid in listing.index and listing.loc[pid, "status"] == "Out"
+        # Listed Out with an injury (not a G League assignment, rest, illness or personal reasons).
+        listed = (listing is not None and pid in listing.index and listing.loc[pid, "status"] == "Out"
+                  and listing.loc[pid, "injury_type"] not in auto_overrides.NOT_AN_INJURY)
         long_absence = r.has_played == 1 and pd.notna(r.absence_streak) and r.absence_streak >= in_season.OUT_STREAK_GAMES
         if isinstance(r.override_kind, str):
             reason = r.override_kind
@@ -102,6 +104,24 @@ def out_info(forecasts: pd.DataFrame, team_ids: pd.Series, today: pd.Timestamp) 
                                    injuries.clean_reason(row.reason) if row is not None else None,
                                    row.report_url if row is not None else None, games_after]
     return out
+
+
+def regular_season_end() -> str | None:
+    schedule = data.saved_schedule()
+    if schedule is None or schedule.empty:
+        return None
+    return str(pd.to_datetime(schedule.GAME_DATE.astype(str).str[:10]).max().date())
+
+
+def out_json(r) -> dict | None:
+    """Currently out: why, the report's status and reason, and games after an expected return."""
+    if not isinstance(r.out_reason, str):
+        return None
+    return {
+        "reason": r.out_reason, "status": r.out_status, "injury": r.out_injury, "reportUrl": r.out_report_url,
+        "gamesAfterReturn": None if r.out_games_after_return is None or pd.isna(r.out_games_after_return)
+        else round(float(r.out_games_after_return), 1),
+    }
 
 
 def back_to_back_info(forecasts: pd.DataFrame, team_ids: pd.Series, today: pd.Timestamp) -> pd.DataFrame:
@@ -213,12 +233,7 @@ def write_fantasy(forecasts: pd.DataFrame, target: str, rosters: pd.DataFrame | 
             "override": override_json(r),
             "b2bLeft": None if pd.isna(r.b2b_left) else int(r.b2b_left),
             "b2bRate": None if pd.isna(r.b2b_rate) else round(float(r.b2b_rate), 3),
-            # Currently out (for the stash list): why, the report's status and reason, games after return.
-            "out": None if not isinstance(r.out_reason, str) else {
-                "reason": r.out_reason, "status": r.out_status, "injury": r.out_injury, "reportUrl": r.out_report_url,
-                "gamesAfterReturn": None if r.out_games_after_return is None or pd.isna(r.out_games_after_return)
-                else round(float(r.out_games_after_return), 1),
-            },
+            "out": out_json(r),
             "playedSoFar": None if pd.isna(r.played_so_far) else int(r.played_so_far),
             "gamesLeft": int(r.team_games_left),
             "restGames": round(float(r.predicted_rest), 1),
@@ -339,11 +354,14 @@ def main():
     for o in overrides.overdue(manual, pd.Timestamp.today().normalize()).itertuples():
         print(f"WARNING: override for {o.player_name} is past its review-by date ({o.review_by.date()}); update data/overrides.csv")
     team_ids = rosters.set_index("PLAYER_ID").TEAM_ID if rosters is not None else pd.Series(dtype=float)
-    # Automatic overrides from the injury report (and team timelines from news); manual rows win.
-    automatic, auto_log = auto_overrides.current(manual, today)
+    # Automatic overrides from the injury report and team timelines from news. Manual rows
+    # win, except over a news row found after the manual row was added.
+    manual_used, automatic, auto_log = auto_overrides.current(manual, today)
     for line in auto_log:
         print(line)
-    combined = pd.concat([manual.assign(kind="manual"), automatic], ignore_index=True) if len(automatic) else manual.assign(kind="manual")
+    combined = manual_used.assign(kind="manual")
+    if len(automatic):
+        combined = pd.concat([combined, automatic], ignore_index=True)
     forecasts = overrides.apply(forecasts, combined, data.saved_schedule(), today, team_ids)
 
     # Back-to-backs: each team's remaining second nights and each player's rest rate.
@@ -401,7 +419,8 @@ def main():
             "rotationRole": bool(r.rotation_role),
             "notOnRoster": bool(r.not_on_roster),
             "override": override_json(r),
-            # Back-to-back second nights the team has left, and how often he sits them.
+            "out": out_json(r),
+            # Back-to-back second nights the team has left, and how often the player sits them.
             "b2bLeft": None if pd.isna(r.b2b_left) else int(r.b2b_left),
             "b2bRate": None if pd.isna(r.b2b_rate) else round(float(r.b2b_rate), 3),
         }
@@ -451,6 +470,8 @@ def main():
             "seasonStarted": season_started,
             "soFarThrough": str(so_far_through)[:10] if so_far_through is not None else None,
             "updatedAsOf": str(updated_as_of)[:10] if updated_as_of is not None else None,
+            # Last day of this regular season, so the site can say "out for the season".
+            "regularSeasonEnd": regular_season_end(),
             "generatedAt": datetime.now().isoformat(timespec="seconds"),
             "games": GAMES,
             "setbackGames": config.SETBACK_GAMES,

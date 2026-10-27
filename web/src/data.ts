@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { Fantasy, Index, Override, PlayerDetail, PlayerSummary, SeasonAccuracy } from './types'
+import type { Fantasy, Index, OutInfo, Override, PlayerDetail, PlayerSummary, SeasonAccuracy } from './types'
 
 /** Where the site is served from: "/" locally, "/next82/" on GitHub Pages. */
 const BASE = import.meta.env.BASE_URL
@@ -10,7 +10,12 @@ let indexPromise: Promise<Index> | null = null
 export function useIndex(): Index | null {
   const [index, setIndex] = useState<Index | null>(null)
   useEffect(() => {
-    indexPromise ??= fetch(`${BASE}data/index.json`).then((r) => r.json())
+    indexPromise ??= fetch(`${BASE}data/index.json`)
+      .then((r) => r.json())
+      .then((index: Index) => {
+        setSeasonEnd(index.meta.regularSeasonEnd ?? null)
+        return index
+      })
     indexPromise.then(setIndex)
   }, [])
   return index
@@ -128,4 +133,65 @@ export function overrideStatus(o: Override): string {
   if (o.earliestReturn && o.latestReturn) return `Out · expected back ${shortDate(o.earliestReturn)}–${shortDate(o.latestReturn)}`
   if (o.earliestReturn) return `Out · expected back ${shortDate(o.earliestReturn)} at the earliest`
   return o.status
+}
+
+// ---------------------------------------------------------------- injuries, in plain words
+
+type WithInjury = { override: Override | null; out: OutInfo | null }
+
+/** Injured: an injury adjustment, or listed Out with an injury on the team's latest report. */
+export function isInjured(p: WithInjury): boolean {
+  return p.override !== null || p.out?.reason === 'injury report'
+}
+
+/** "left foot fracture", "right achilles tendon (repair / surgery)", or null. */
+export function injuryName(p: WithInjury): string | null {
+  const raw = p.out?.injury
+  if (!raw) return null
+  const [body, ...kind] = raw
+    .replace(/^Injury\/Illness\s*-\s*/i, '')
+    .split(';')
+    .map((s) => s.trim().toLowerCase().replace(/\s*\/\s*$/, '').replace(/\b(acl|mcl|pcl|lcl)\b/g, (m) => m.toUpperCase()))
+  const extra = kind.filter(Boolean)
+  return extra.length ? `${body} (${extra.join(', ')})` : body
+}
+
+/** Set once from the index: the regular season's last day, for "out for the season". */
+let seasonEnd: string | null = null
+export function setSeasonEnd(iso: string | null) {
+  seasonEnd = iso
+}
+
+const today = () => new Date().toISOString().slice(0, 10)
+
+/** "expected back no earlier than Feb 1 (our estimate)" and similar, in plain words. */
+export function returnText(o: Override): string {
+  const whose = o.estimated ? 'our estimate' : 'team timeline'
+  if (o.indefinite || !o.earliestReturn) return 'out with no return date yet'
+  if (seasonEnd && o.earliestReturn.slice(0, 10) > seasonEnd)
+    return o.estimated
+      ? `not expected back this season (${whose}: ${shortDate(o.earliestReturn)}, ${o.earliestReturn.slice(0, 4)} at the earliest)`
+      : `out for the season (${whose})`
+  // Window already open: the earliest date has passed.
+  if (o.earliestReturn.slice(0, 10) <= today())
+    return o.latestReturn ? `could return any day, by ${shortDate(o.latestReturn)} (${whose})` : `could return any day (${whose})`
+  if (o.latestReturn) return `expected back between ${shortDate(o.earliestReturn)} and ${shortDate(o.latestReturn)} (${whose})`
+  return `expected back no earlier than ${shortDate(o.earliestReturn)} (${whose})`
+}
+
+function host(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '')
+  } catch {
+    return url
+  }
+}
+
+/** Where the injury information comes from. */
+export function injurySource(p: WithInjury): string {
+  const o = p.override
+  if (o?.kind === 'news') return `Team timeline reported in the news (${host(o.sourceUrl)})`
+  if (o?.kind === 'automatic') return 'Official NBA injury report, with a return estimate from published recovery studies'
+  if (o?.kind === 'manual') return `Injury news (${host(o.sourceUrl)}), entered by hand`
+  return 'Listed Out on the official NBA injury report'
 }

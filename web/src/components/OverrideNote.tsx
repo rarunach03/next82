@@ -1,7 +1,7 @@
 import { overrideStatus, shortDate } from '../data'
 import type { Override } from '../types'
 
-/** Banner for a player whose updated forecast was adjusted by hand from injury news. */
+/** The full injury adjustment for a player page's details: kind, return window, note and sources. */
 export default function OverrideNote({ override: o }: { override: Override }) {
   return (
     <div className="mt-4 rounded-xl border border-risky/40 bg-risky/10 px-4 py-3 text-sm">
@@ -32,7 +32,7 @@ export default function OverrideNote({ override: o }: { override: Override }) {
         )}
         {o.dateAdded && <> · added {shortDate(o.dateAdded)}</>}
         {o.reviewBy && <> · to be reviewed by {shortDate(o.reviewBy)}</>}
-        {' · '}The updated forecast below uses this.
+        {' · '}The expected games above use this.
       </p>
     </div>
   )

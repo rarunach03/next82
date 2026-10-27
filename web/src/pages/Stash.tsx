@@ -1,6 +1,9 @@
 import { useSearchParams } from 'react-router'
 import { useNavigate } from 'react-router'
-import { fantasyValue, shortDate, useFantasy } from '../data'
+import InjuredBadge from '../components/InjuredBadge'
+import Tip from '../components/Tip'
+import { GLOSSARY } from '../glossary'
+import { fantasyValue, injuryName, isInjured, shortDate, useFantasy } from '../data'
 import type { FantasyFormat, FantasyPlayer } from '../types'
 
 const FORMATS: { id: FantasyFormat; label: string }[] = [
@@ -8,13 +11,6 @@ const FORMATS: { id: FantasyFormat; label: string }[] = [
   { id: 'yahoo', label: 'Yahoo points' },
   { id: 'cat9', label: '9-cat' },
 ]
-const REASON_LABEL: Record<string, string> = {
-  'injury report': 'Injury report',
-  'long absence, no report': 'Long absence, no report',
-  automatic: 'Injury report + recovery estimate',
-  manual: 'Manual adjustment',
-  news: 'Team timeline',
-}
 
 function expectedReturn(p: FantasyPlayer): string {
   const o = p.override
@@ -45,11 +41,14 @@ export default function Stash() {
       <p className="text-sm font-semibold tracking-widest text-accent uppercase">Fantasy</p>
       <h1 className="mt-2 font-display text-5xl leading-none font-extrabold tracking-tight uppercase">Who to stash</h1>
       <p className="mt-4 max-w-2xl text-muted">
-        Players who are out right now but still worth a roster spot: rest-of-season value above replacement, counting
-        only the games they're forecast to play after they return. Highest value first.
+        Players who are out right now but still worth a roster spot: what they're worth{' '}
+        <Tip tip={GLOSSARY.aboveReplacement(fantasy.poolSize)}>above a free-agent pickup</Tip>, counting only the games
+        they're expected to play after they return. Highest value first.
       </p>
       <div className="mt-6" role="radiogroup" aria-label="Scoring">
-        <div className="mb-1 text-xs text-faint">Scoring</div>
+        <div className="mb-1 text-xs text-faint">
+          Scoring (<Tip tip={GLOSSARY.cat9}>what's 9-cat?</Tip>)
+        </div>
         <div className="inline-flex rounded-lg border border-line bg-surface p-0.5">
           {FORMATS.map((f) => (
             <button
@@ -97,12 +96,12 @@ export default function Stash() {
                   <span className="ml-2 text-xs text-faint">{p.team}</span>
                 </td>
                 <td className="py-3 pr-3">
-                  <div className="text-xs font-semibold text-risky">{REASON_LABEL[p.out!.reason]}</div>
-                  {p.out!.injury && (
-                    <div className="max-w-xs truncate text-xs text-muted" title={p.out!.injury}>
-                      {p.out!.injury.replace('Injury/Illness - ', '')}
-                    </div>
+                  {isInjured(p) ? (
+                    <InjuredBadge p={p} />
+                  ) : (
+                    <span className="text-xs font-semibold text-muted">Missing games</span>
                   )}
+                  {injuryName(p) && <div className="mt-0.5 max-w-xs text-xs text-muted">{injuryName(p)}</div>}
                   {p.out!.reportUrl && (
                     <a
                       href={p.out!.reportUrl}
@@ -129,9 +128,9 @@ export default function Stash() {
         </table>
       </div>
       <p className="mt-3 text-xs text-faint">
-        "Injury report": listed Out on the team's latest official NBA injury report, with no return estimate yet (the
-        updated forecast already counts the missed games). "Long absence, no report": out for 5+ straight team games
-        without being listed. Recovery estimates and manual adjustments come with their sources on each player's page.
+        Hover or tap "Injured" for where the information comes from (the official NBA injury report, a team timeline in
+        the news, or a recovery estimate). "Missing games": out for 5+ straight team games without being on the injury
+        report. Full details and sources are on each player's page.
       </p>
     </article>
   )

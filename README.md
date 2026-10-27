@@ -7,6 +7,15 @@ what drives each number, and turns it into fantasy basketball rankings.
 
 ## What's on the site
 
+Each page leads with one plain answer and keeps the details a click away. Player pages open with
+"Expected to play about X games (likely A–B)" from the updated forecast and one sentence on status,
+injury, return estimate and games expected; the preseason forecast, its factors and the injury
+adjustment's kind and sources are under Details. Injured players carry one "Injured" badge
+everywhere (its source shows on hover or tap), jargon has short hover explanations, and the menu is
+Players (all players, who's injured), Fantasy (rankings, trade analyzer, who to stash) and How it
+works (accuracy, about). Rankings show rank, player, status, games left and value, with the rest
+behind "More columns".
+
 - **Preseason forecast.** Games each player will play this season, made before opening night
   (Oct 20, 2026) and frozen. It never changes, so it can be graded honestly. Each forecast
   comes with the factors behind it, in games. Players coming back from a missed season get two
@@ -30,8 +39,9 @@ what drives each number, and turns it into fantasy basketball rankings.
 - **Injury adjustments.** The NBA's official injury report is read daily. Players listed Out with a
   serious injury (ACL, Achilles, labrum, meniscus, patellar tendon tear; foot, lower-leg, fibula,
   hand or wrist fracture; ankle dislocation; back surgery) get an automatic return estimate
-  from cited recovery studies; team-announced timelines and manual adjustments override it. Each is
-  labeled on the site with its sources.
+  from cited recovery studies. Every 3 days an automatic news search (Claude Code, restricted to web
+  search and one file) looks for team-announced timelines, which override the estimate; manual
+  adjustments cover the rest. Each is labeled on the site with its sources.
 - **Fantasy tools.** A trade analyzer (rest-of-season value of two sides, shareable by link), a
   "who to stash" list of injured players worth holding, and back-to-back counts with each player's
   chance of sitting the second night.
@@ -97,11 +107,17 @@ until the pipeline is rerun, the site says newer data is available. Set
 order and the latest official injury report,
 runs `python -m next82.export` (updated forecasts, automatic injury adjustments, ranges, tiers,
 fantasy values including rookies, back-to-backs, the stash list and accuracy), and commits and pushes if anything changed. Each push redeploys the site
-through GitHub Actions (`.github/workflows/deploy-pages.yml`).
+through GitHub Actions (`.github/workflows/deploy-pages.yml`). After the injury report is read, it
+runs the news step (`scripts/news_timelines.sh`, below); if that fails or times out, the refresh
+carries on. If `data/news_timelines.csv` or `data/overrides.csv` changed since the last refresh, it
+re-exports and pushes even on a day it already ran.
 
 The refresh runs on a home computer, not in the cloud: stats.nba.com doesn't respond to cloud
-servers. On the project's Mac a launchd job runs it every morning at 8am from a separate copy of
-the repo (macOS doesn't let background jobs into the Desktop folder). Run it by hand any time:
+servers. On the project's Mac a launchd job runs it hourly from a separate copy of the repo (macOS
+doesn't let background jobs into the Desktop folder): the full refresh happens once a day, and on
+later runs that day it only re-exports and pushes if `data/news_timelines.csv` or
+`data/overrides.csv` changed.
+Run it by hand any time:
 
 ```bash
 ./scripts/refresh.sh
@@ -128,7 +144,8 @@ season-ending).
    about to play, so each player's status is his team's most recent listing; the override clears when
    that listing drops him or he plays again. Unclassified reasons and unmatched names are logged.
 2. **Team timelines from news**: `data/news_timelines.csv` replaces the automatic estimate (it's no
-   longer an estimate). Format, one row per player:
+   longer an estimate), and is shown as "Team timeline" with its source. Format, one row per player
+   (if there are several, the most recently found is used):
 
    | column | meaning |
    |---|---|
@@ -137,10 +154,29 @@ season-ending).
    | `latest_return` | YYYY-MM-DD, optional |
    | `note` | the announced timeline in plain words |
    | `source_url` | link to the news story |
-   | `date_found` | YYYY-MM-DD the timeline was found |
+   | `date_found` | YYYY-MM-DD the row was added |
+   | `source_date` | YYYY-MM-DD the source was published |
 
-   It only applies while the player is listed Out on the report.
-3. **Manual**: `data/overrides.csv` always wins: `player_id, player_name, status, earliest_return,
+   It applies while the player is listed Out on the report, or when it was found after the player's
+   manual row was added (then it replaces the manual row, which stays as the fallback).
+
+   **Automatic news search** (`next82.news`, `scripts/news_timelines.sh`): Claude Code in
+   non-interactive mode (`claude -p`) searches for team-announced or major-outlet timelines for every
+   player listed Out with an injury on the latest report, plus anyone with a manual or automatic
+   override. It skips players who got a news row in the last 7 days unless their report status
+   changed. It runs when 3 or more days have passed since the last run, right away when a new player
+   is listed Out with a serious injury type, or with `--force`; the state lives in
+   `.git/next82-news-state.json`. Claude Code runs in a temporary folder holding only a copy of the
+   news file, with `--restricted --tools WebSearch,WebFetch,Read,Edit`, Read and Edit allowed only on
+   that file, and `--permission-mode dontAsk` (no shell, no other files, no git). It's told to add a
+   row only when a dated source clearly states a timeline, never to guess, and that "out for the
+   season" means a return after the regular season ends. Its rows are then checked in Python (right
+   columns, a player it was asked about, valid dates after the injury and the source, a source URL
+   that resolves); valid rows are merged, bad ones rejected, and every added, changed or rejected row
+   is printed to the refresh log. Timeout 25 minutes, budget cap $10 a run. It finds `claude` on the
+   PATH, then the copy bundled with the VS Code extension (`NEXT82_CLAUDE` overrides).
+3. **Manual**: `data/overrides.csv` wins over the automatic estimate and over news found before
+   the manual row was added: `player_id, player_name, status, earliest_return,
    latest_return, estimated, note, source_url, source_url_2, date_added, review_by` (return dates and
    the second source optional; `estimated` = yes for our own estimate). Use it when the report is less
    specific than the news. The site and the refresh log flag a manual row past its review-by date.
@@ -187,7 +223,7 @@ classified as fractures too, so a tibia or fibula stress fracture gets the traum
   also cut the old model's over-forecast for healthy players early in recent seasons. Rookies use the
   model without them (`models/in_season_no_injury.txt`): with them, rookie validation got worse
   (5.79 -> 6.17 games).
-- **Back-to-backs** (`back_to_back.py`): a player "rested" when he missed the second night but played
+- **Back-to-backs** (`back_to_back.py`): a player "rested" when they missed the second night but played
   the next game; rates from the last three seasons, pulled toward the league average (9.8%) as if the
   league rate were 40 extra back-to-backs. Shown on the site; not added to the forecast, because it
   made validation slightly worse (7.122 -> 7.133 games).
@@ -209,12 +245,13 @@ src/next82/
   accuracy.py      grading the preseason forecast during the season
   injuries.py      the NBA's official injury report: fetch, parse, classify, match
   auto_overrides.py  automatic return estimates from the report and recovery table
+  news.py          automatic news search for team timelines (Claude Code, validated)
   injury_history.py  past injury reports for model features
   back_to_back.py  back-to-back rest rates
   explain.py       SHAP factors with readable labels
   export.py        the website's data (the only way data reaches the site)
 web/               React site (Vite, TypeScript, Tailwind, Recharts); data in public/data/
-scripts/           refresh.sh (daily update)
+scripts/           refresh.sh (daily update), news_timelines.sh (news search)
 data/, models/     committed: frozen forecasts, current-season data, LightGBM models (text format)
 app/               the original Streamlit app (internal)
 tests/             pytest; tests needing the full downloaded data skip themselves
@@ -232,13 +269,18 @@ tests/             pytest; tests needing the full downloaded data skip themselve
   no updated forecast.
 - The preseason edge over simple guessing is real but modest (15.6 vs 17.2 games).
 - Comeback forecasts can't see injury type or medical clearance.
+- The news search only finds what's published and stated clearly; vague reports ("no timeline",
+  "day to day") add nothing, and it runs on the Mac, so it pauses when the Mac is off.
 
 ## Next up
 
 - **A data-use agreement with the NBA.** NBA.com's terms limit its statistics to news reporting or
   private, non-commercial use and require consent for a website built around a database; this
   project proceeds as a non-commercial student project with attribution.
-- **More recovery studies** for injury types without an NBA-specific study (hand and wrist
-  fractures, concussions, plantar fascia, patellar tendon), so more injuries get automatic estimates.
-- **Filling `data/news_timelines.csv` automatically** from team announcements (the format is above).
+- **NBA-specific recovery studies** where the table borrows from the NFL (fibula fractures, ankle
+  dislocations, patellar tendon tears), and rows for concussions, plantar fascia and knee surgeries
+  of unknown type, so more injuries get automatic estimates.
+- **Checking news rows against the injury report**: a news row stays until it's replaced; it could
+  also expire when the player is back in the lineup.
+- **Moving the refresh off the Mac** if stats.nba.com ever answers cloud servers.
 - **Grading the updated forecast** at the end of the season, alongside the preseason one.
