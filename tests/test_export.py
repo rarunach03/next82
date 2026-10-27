@@ -87,3 +87,14 @@ def test_fantasy_file(out):
         assert 0 <= p["restGames"] <= p["gamesLeft"]
     # Players with a preseason forecast but no updated one (unsigned, no games) aren't ranked.
     assert not any(by_id[i]["updated"] is None for i in ranked)
+
+
+def test_accuracy_file(out):
+    path = out / "accuracy.json"
+    if not path.exists():
+        pytest.skip("season hasn't started")
+    a = json.loads(path.read_text())
+    assert set(a["methods"]) == {"model", "last_season", "three_year"}
+    assert a["gapRange"][0] <= a["gapRange"][1]
+    dates = [t["date"] for t in a["trend"]]
+    assert dates == sorted(dates) and dates[-1] == a["asOf"]

@@ -9,6 +9,7 @@ const index = join(dist, 'index.html')
 const routes = [
   'about',
   'rankings',
+  'accuracy',
   ...readdirSync(join(dist, 'data', 'players')).map((f) => `player/${f.replace('.json', '')}`),
 ]
 for (const route of routes) {

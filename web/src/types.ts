@@ -152,3 +152,29 @@ export interface Fantasy {
   replacement: Record<FantasyFormat, number>
   players: FantasyPlayer[]
 }
+
+// accuracy.json, written by `python -m next82.export`.
+export type AccuracyMethod = 'model' | 'last_season' | 'three_year'
+
+export interface AccuracyGroup extends Record<AccuracyMethod, number> {
+  n: number
+}
+
+export interface AccuracyPoint extends Record<AccuracyMethod, number> {
+  date: string
+  avgTeamGames: number
+}
+
+export interface SeasonAccuracy {
+  asOf: string
+  avgTeamGames: number
+  methods: Record<AccuracyMethod, string>
+  groups: Record<string, AccuracyGroup>
+  bestBaseline: AccuracyMethod
+  /** 95% range for (best baseline miss - model miss); spanning 0 means it could be luck. */
+  gapRange: [number, number]
+  excludedNotOnRoster: number
+  trend: AccuracyPoint[]
+  seasonGames: number
+  testSeasons: { seasons: [string, string]; model: number; bestBaseline: number }
+}

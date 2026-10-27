@@ -15,7 +15,7 @@ from datetime import datetime
 
 import pandas as pd
 
-from next82 import config, data, evaluate, fantasy, in_season
+from next82 import accuracy, config, data, evaluate, fantasy, in_season
 from next82.intervals import tier
 from next82.explain import GAMES, similar_comebacks, top_factors
 from next82.preseason import load_forecasts, load_ranges
@@ -76,6 +76,22 @@ def in_season_accuracy() -> dict:
         "updatedBestBaseline": best,
         "updatedBestBaselineMae": round(baselines[best], 1),
     }
+
+
+def write_accuracy(rosters: pd.DataFrame | None):
+    """accuracy.json: the frozen preseason forecast graded against games so far."""
+    logs = data.saved_season_logs()
+    if rosters is None or logs is None:
+        return
+    graded = accuracy.season_accuracy(load_forecasts(), rosters, *logs)
+    if graded is not None:
+        metrics = json.loads(METRICS_PATH.read_text())
+        graded["testSeasons"] = {
+            "seasons": metrics["test_seasons"],
+            "model": round(metrics["results"][metrics["final_model"]]["mae_all"], 1),
+            "bestBaseline": round(min(metrics["results"][k]["mae_all"] for k in ("Same as last year", "3-year average")), 1),
+        }
+        write_json(OUT_DIR / "accuracy.json", graded)
 
 
 def write_fantasy(forecasts: pd.DataFrame, target: str):
@@ -277,6 +293,7 @@ def main():
         write_json(OUT_DIR / "players" / f"{int(r.PLAYER_ID)}.json", detail)
 
     write_fantasy(forecasts, target)
+    write_accuracy(rosters)
 
     teams = []
     if rosters is not None:

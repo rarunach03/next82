@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { Fantasy, Index, PlayerDetail, PlayerSummary } from './types'
+import type { Fantasy, Index, PlayerDetail, PlayerSummary, SeasonAccuracy } from './types'
 
 /** Where the site is served from: "/" locally, "/next82/" on GitHub Pages. */
 const BASE = import.meta.env.BASE_URL
@@ -17,6 +17,19 @@ export function useIndex(): Index | null {
 }
 
 let fantasyPromise: Promise<Fantasy | null> | null = null
+let accuracyPromise: Promise<SeasonAccuracy | null> | null = null
+
+/** Season-to-date accuracy. `undefined` while loading, `null` before the season. */
+export function useAccuracy(): SeasonAccuracy | null | undefined {
+  const [accuracy, setAccuracy] = useState<SeasonAccuracy | null | undefined>(undefined)
+  useEffect(() => {
+    accuracyPromise ??= fetch(`${BASE}data/accuracy.json`)
+      .then((r) => (r.ok ? r.json() : null))
+      .catch(() => null)
+    accuracyPromise.then(setAccuracy)
+  }, [])
+  return accuracy
+}
 
 /** Fantasy values, fetched once. `undefined` while loading, `null` if not exported. */
 export function useFantasy(): Fantasy | null | undefined {

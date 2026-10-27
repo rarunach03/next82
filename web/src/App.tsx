@@ -3,6 +3,7 @@ import { BrowserRouter, Link, Route, Routes, useLocation } from 'react-router'
 import SearchBox from './components/SearchBox'
 import { baselineText, latestFinishedSeason, shortDate, useIndex } from './data'
 import About from './pages/About'
+import Accuracy from './pages/Accuracy'
 import Home from './pages/Home'
 import Rankings from './pages/Rankings'
 
@@ -45,6 +46,12 @@ function Shell() {
               Rankings
             </Link>
             <Link
+              to="/accuracy"
+              className={`text-sm font-medium transition hover:text-ink ${pathname === '/accuracy' ? 'text-ink' : 'text-muted'}`}
+            >
+              Accuracy
+            </Link>
+            <Link
               to="/about"
               className={`text-sm font-medium transition hover:text-ink ${pathname === '/about' ? 'text-ink' : 'text-muted'}`}
             >
@@ -71,6 +78,7 @@ function Shell() {
                 }
               />
               <Route path="/rankings" element={<Rankings meta={index.meta} teams={index.teams} />} />
+              <Route path="/accuracy" element={<Accuracy meta={index.meta} />} />
               <Route path="/about" element={<About meta={index.meta} />} />
               <Route path="*" element={<p className="py-16 text-muted">Page not found.</p>} />
             </Routes>
