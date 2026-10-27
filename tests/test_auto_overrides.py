@@ -29,11 +29,12 @@ def _build(log, last_game=None, news=NO_NEWS, manual=(), player_games=None):
                                 player_games, TODAY)[0].set_index("player_id")
 
 
-def test_serious_injury_gets_an_estimate_from_the_last_game():
+def test_serious_injury_gets_an_estimate():
+    # Hurt in his last game (Oct 29), listed the next day: counted from the listing.
     log = _log([{"PLAYER_ID": 1, "team": "A", "status": "Out", "injury_type": "ACL", "body_part": "acl tear",
                  "report_day": "2026-10-30"}])
-    r = _build(log, last_game={1: pd.Timestamp("2026-10-20")}).loc[1]
-    assert r.earliest_return == pd.Timestamp("2026-10-20") + pd.Timedelta(days=298)
+    r = _build(log, last_game={1: pd.Timestamp("2026-10-29")}).loc[1]
+    assert r.earliest_return == pd.Timestamp("2026-10-30") + pd.Timedelta(days=298)
     assert pd.isna(r.latest_return)              # can be season-ending
     assert r.estimated and r.kind == "automatic"
     assert r.source_url.startswith("https://ak-static.cms.nba.com") and r.source_url_2 == "https://study/acl"
@@ -52,13 +53,17 @@ def test_window_for_types_that_arent_season_ending():
     log = _log([{"PLAYER_ID": 1, "team": "A", "status": "Out", "injury_type": "fracture", "body_part": "foot fracture",
                  "report_day": "2026-10-30"}])
     r = _build(log, last_game={1: pd.Timestamp("2026-10-25")}).loc[1]
-    assert r.earliest_return == pd.Timestamp("2026-12-19") and r.latest_return == pd.Timestamp("2027-01-02")
+    start = pd.Timestamp("2026-10-30")  # later than the last game
+    assert r.earliest_return == start + pd.Timedelta(days=55) and r.latest_return == start + pd.Timedelta(days=69)
 
 
 def test_overdue_recovery_means_back_any_time():
+    # Already out at the end of last season, so counted from his March game: overdue now.
     log = _log([{"PLAYER_ID": 1, "team": "A", "status": "Out", "injury_type": "fracture", "body_part": "foot fracture",
                  "report_day": "2026-10-30"}])
-    r = _build(log, last_game={1: pd.Timestamp("2026-03-01")}).loc[1]
+    end = pd.DataFrame({"PLAYER_ID": [1], "status": ["Out"], "injury_type": ["fracture"]})
+    r = auto_overrides.build(log, RECOVERY, NO_NEWS, [], pd.Series({1: pd.Timestamp("2026-03-01")}), None, TODAY,
+                             end)[0].set_index("player_id").loc[1]
     assert r.earliest_return == TODAY
     assert r.latest_return == TODAY + pd.Timedelta(days=auto_overrides.OVERDUE_WINDOW_DAYS)
 
