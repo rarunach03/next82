@@ -94,11 +94,13 @@ the repo (macOS doesn't let background jobs into the Desktop folder). Run it by 
 ## Manual injury adjustments
 
 The model can't read injury news, so known long absences go in `data/overrides.csv`, one row per
-player: `player_id, player_name, status, earliest_return, latest_return, note, source_url,
-date_added, review_by` (return dates are optional). For those players the updated forecast
+player: `player_id, player_name, status, earliest_return, latest_return, estimated, note,
+source_url, source_url_2, date_added, review_by` (return dates and the second source are optional;
+`estimated` = yes when the earliest return is our own estimate, not a team timeline). For those players the updated forecast
 becomes games played so far plus the model's predicted share of the team's games from the
 return window onward; the earliest return sets the high end of the range and the latest the
-low end. With no return window the site shows "Out indefinitely", with a range starting at 0
+low end; with no latest return the low end is 0 more games and the point is the middle of the
+range. With no return window the site shows "Out indefinitely", with a range starting at 0
 more games. Fantasy values and tiers use the adjusted forecast; the preseason forecast, the
 accuracy page and the model's test metrics never do. The site marks each adjustment with its
 note and source, and the refresh log warns when one is past its review-by date. Edit the CSV,

@@ -73,6 +73,8 @@ def override_json(r) -> dict | None:
         "status": r.override_status,
         "note": r.override_note,
         "sourceUrl": r.override_source,
+        "sourceUrl2": r.override_source_2 if isinstance(r.override_source_2, str) else None,
+        "estimated": bool(r.override_estimated),
         "dateAdded": day(r.override_added),
         "reviewBy": day(r.override_review_by),
         "earliestReturn": day(r.override_earliest),

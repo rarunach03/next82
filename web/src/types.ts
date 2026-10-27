@@ -42,6 +42,9 @@ export interface Override {
   status: string
   note: string
   sourceUrl: string
+  sourceUrl2: string | null
+  /** The earliest return is our own estimate (e.g. typical recovery time), not a team timeline. */
+  estimated: boolean
   dateAdded: string | null
   reviewBy: string | null
   earliestReturn: string | null

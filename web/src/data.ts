@@ -113,6 +113,8 @@ export function playedText(games: number, seasonGames: number): string {
 /** One-line description of a manual adjustment's status. */
 export function overrideStatus(o: Override): string {
   if (o.indefinite) return 'Out indefinitely'
+  if (o.estimated && o.earliestReturn)
+    return `Estimated return no earlier than ${shortDate(o.earliestReturn)} (our estimate, not the team's)`
   if (o.earliestReturn && o.latestReturn) return `Out · expected back ${shortDate(o.earliestReturn)}–${shortDate(o.latestReturn)}`
   if (o.earliestReturn) return `Out · expected back ${shortDate(o.earliestReturn)} at the earliest`
   return o.status

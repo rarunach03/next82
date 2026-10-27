@@ -202,7 +202,7 @@ export default function Rankings({ meta, teams }: { meta: Meta; teams: Team[] })
                         title={`Manual adjustment: ${r.p.override.note}`}
                         className="ml-2 inline-flex rounded-full border border-risky/50 px-2 py-0.5 align-middle text-xs font-semibold text-risky"
                       >
-                        {r.p.override.indefinite ? 'Out indefinitely' : 'Out'}
+                        {r.p.override.indefinite ? 'Out indefinitely' : r.p.override.estimated ? 'Out (est.)' : 'Out'}
                       </a>
                     )}
                     {r.p.rookie && (
@@ -217,8 +217,14 @@ export default function Rankings({ meta, teams }: { meta: Meta; teams: Team[] })
                   <td className="tabular py-3 pr-3">{fmt(r.perGame, cat9 ? 2 : 1)}</td>
                   <td className="tabular hidden py-3 pr-3 text-muted md:table-cell">{r.perGameRank}</td>
                   <td className="tabular hidden py-3 pr-3 text-muted sm:table-cell">
-                    <span title={r.p.override?.indefinite ? 'Out indefinitely: uses the middle of the likely range' : undefined}>
-                      {r.p.override?.indefinite && '~'}
+                    <span
+                      title={
+                        r.p.override && !r.p.override.latestReturn
+                          ? 'No firm return date: uses the middle of the likely range'
+                          : undefined
+                      }
+                    >
+                      {r.p.override && !r.p.override.latestReturn && '~'}
                       {Math.round(r.games)}
                     </span>
                     {view === 'ros' && <span className="text-faint"> of {r.p.gamesLeft}</span>}

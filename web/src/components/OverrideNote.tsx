@@ -14,6 +14,14 @@ export default function OverrideNote({ override: o }: { override: Override }) {
         <a href={o.sourceUrl} target="_blank" rel="noreferrer" className="text-accent underline-offset-2 hover:underline">
           Source ↗
         </a>
+        {o.sourceUrl2 && (
+          <>
+            {' · '}
+            <a href={o.sourceUrl2} target="_blank" rel="noreferrer" className="text-accent underline-offset-2 hover:underline">
+              Source 2 ↗
+            </a>
+          </>
+        )}
         {o.dateAdded && <> · added {shortDate(o.dateAdded)}</>}
         {o.reviewBy && <> · to be reviewed by {shortDate(o.reviewBy)}</>}
         {' · '}The updated forecast below uses this; the model can't read injury news on its own.

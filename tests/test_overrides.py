@@ -20,11 +20,12 @@ def _schedule():
     return pd.DataFrame({"TEAM_ID": 1, "GAME_DATE": pd.date_range(TODAY, periods=72)})
 
 
-def _override(earliest=None, latest=None, review_by="2026-11-15"):
+def _override(earliest=None, latest=None, review_by="2026-11-15", estimated=False):
     return pd.DataFrame([{
         "player_id": 7, "player_name": "Test Player", "status": "Out",
         "earliest_return": pd.to_datetime(earliest), "latest_return": pd.to_datetime(latest),
-        "note": "test", "source_url": "https://example.com", "date_added": TODAY,
+        "estimated": estimated, "note": "test", "source_url": "https://example.com", "source_url_2": None,
+        "date_added": TODAY,
         "review_by": pd.to_datetime(review_by),
     }])
 
@@ -57,9 +58,13 @@ def test_only_latest_return_means_back_any_time_until_then():
 
 
 def test_only_earliest_return_puts_the_low_end_at_zero_more_games():
-    r = _apply(_override(earliest="2026-11-21"))
+    # No latest return: could be season-ending, so the low end is 0 more games and the
+    # point is the middle of the range, not the best case of returning at the earliest date.
+    r = _apply(_override(earliest="2026-11-21", estimated=True))
     assert r.updated_low == 10
-    assert r.updated_total == pytest.approx(10 + 0.80 * 52)
+    assert r.updated_high == pytest.approx(10 + 0.95 * 52)
+    assert r.updated_total == pytest.approx((r.updated_low + r.updated_high) / 2)
+    assert r.override_estimated
 
 
 def test_overdue_reviews_are_flagged():
@@ -69,9 +74,10 @@ def test_overdue_reviews_are_flagged():
 
 def test_csv_columns_and_dates(tmp_path):
     path = tmp_path / "overrides.csv"
-    path.write_text(",".join(overrides.COLUMNS) + "\n7,Test,Out,,2026-12-01,note,https://x,2026-11-01,2026-11-15\n")
+    path.write_text(",".join(overrides.COLUMNS) + "\n7,Test,Out,,2026-12-01,yes,note,https://x,,2026-11-01,2026-11-15\n")
     o = overrides.load(path)
     assert pd.isna(o.earliest_return.iloc[0]) and o.latest_return.iloc[0] == pd.Timestamp("2026-12-01")
+    assert o.estimated.iloc[0] and o.source_url_2.iloc[0] is None
     path.write_text("player_id,status\n7,Out\n")
     with pytest.raises(ValueError):
         overrides.load(path)
