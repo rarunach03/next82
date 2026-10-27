@@ -21,7 +21,7 @@ COMMIT_MESSAGE="Refresh rosters and games so far"
 main() {
   cd "$(dirname "$0")/.."
   local today marker last_refresh_commit
-  today=$(date +%Y-%m-%d)
+  today=${REFRESH_TODAY:-$(date +%Y-%m-%d)}  # override for testing
   marker=.git/next82-last-refresh
   echo "== $(date) =="
   git pull --rebase --quiet
