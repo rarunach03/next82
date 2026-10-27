@@ -131,6 +131,9 @@ export interface FantasyPlayer {
   name: string
   team: string | null
   tier: Tier | null
+  /** In their first NBA season: ranked from this season's games plus a draft-range baseline. */
+  rookie: boolean
+  draftRange: string | null
   playedSoFar: number | null
   /** Team games left, and the games the updated forecast expects the player to play. */
   gamesLeft: number
@@ -147,6 +150,9 @@ export interface Fantasy {
   season: string
   /** This season's stats are blended with the prior as if the prior were this many games. */
   shrinkGames: number
+  /** Rookies: shrunk toward a draft-range baseline, and ranked after this many games. */
+  rookieShrinkGames: number | null
+  rookieMinGames: number
   poolSize: number
   /** Per-game score of the 156th-best player per game, by format. Value is measured above it. */
   replacement: Record<FantasyFormat, number>

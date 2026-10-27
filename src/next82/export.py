@@ -15,7 +15,7 @@ from datetime import datetime
 
 import pandas as pd
 
-from next82 import accuracy, config, data, evaluate, fantasy, in_season
+from next82 import accuracy, config, data, evaluate, fantasy, in_season, rookies
 from next82.intervals import tier
 from next82.explain import GAMES, similar_comebacks, top_factors
 from next82.preseason import load_forecasts, load_ranges
@@ -94,27 +94,40 @@ def write_accuracy(rosters: pd.DataFrame | None):
         write_json(OUT_DIR / "accuracy.json", graded)
 
 
-def write_fantasy(forecasts: pd.DataFrame, target: str):
+def write_fantasy(forecasts: pd.DataFrame, target: str, rosters: pd.DataFrame | None):
     """fantasy.json: per-game production and forecast games for ranked players.
 
-    Only players with an updated forecast (on a roster, or with games this season)
-    are ranked. Rookies have no forecast yet, so they don't appear. The site
-    multiplies per-game value by games and ranks in the browser.
+    Ranked: players with an updated forecast (on a roster, or with games this
+    season), and rookies once they've played rookies.MIN_GAMES games. Everyone is
+    scored together (one 9-cat pool, one replacement level). The site multiplies
+    per-game value by games and ranks in the browser.
     """
-    ranked = forecasts[forecasts.updated_total.notna()]
-    values = fantasy.player_values(ranked)
-    if values.empty:
+    ranked = forecasts[forecasts.updated_total.notna()].set_index("PLAYER_ID")
+    per_game = fantasy.player_values(ranked)
+    if per_game.empty:
         return
-    rows = ranked.set_index("PLAYER_ID").join(values, how="inner")
+    veterans = ranked.join(per_game[fantasy.STATS], how="inner").assign(rookie=False, draft_range=None)
+    veterans["team"] = veterans.TEAM_ABBREVIATION_NOW
+    rookie_rows = rookies.current_rookies(rosters, forecasts.PLAYER_ID) if rosters is not None else pd.DataFrame()
+    if not rookie_rows.empty:
+        rookie_rows = rookie_rows.assign(rookie=True, tier=None, team=rookie_rows.TEAM_ABBREVIATION)
+    cols = ["PLAYER_NAME", "team", "tier", "rookie", "draft_range", "played_so_far", "team_games_left",
+            "predicted_rest", "updated_total", *fantasy.STATS]
+    rows = pd.concat([veterans[cols], rookie_rows[cols]] if not rookie_rows.empty else [veterans[cols]])
+    rows = rows.join(fantasy.score(rows[fantasy.STATS])[["espn", "yahoo", *[f"z_{c}" for c in [*fantasy.CATEGORIES, "total"]]]])
+
     k = json.loads(fantasy.METRICS_PATH.read_text())["shrink_k"]
+    rookie_k = json.loads(rookies.METRICS_PATH.read_text())["shrink_k"] if rookies.METRICS_PATH.exists() else None
     replacement = fantasy.replacement_levels(rows.rename(columns={"z_total": "cat9"}))
     players = []
     for pid, r in rows.iterrows():
         players.append({
             "id": int(pid),
             "name": r.PLAYER_NAME,
-            "team": r.TEAM_ABBREVIATION_NOW if pd.notna(r.TEAM_ABBREVIATION_NOW) else None,
-            "tier": r.tier,
+            "team": r.team if pd.notna(r.team) else None,
+            "tier": r.tier if isinstance(r.tier, str) else None,
+            "rookie": bool(r.rookie),
+            "draftRange": r.draft_range,
             "playedSoFar": None if pd.isna(r.played_so_far) else int(r.played_so_far),
             "gamesLeft": int(r.team_games_left),
             "restGames": round(float(r.predicted_rest), 1),
@@ -127,6 +140,8 @@ def write_fantasy(forecasts: pd.DataFrame, target: str):
     write_json(OUT_DIR / "fantasy.json", {
         "season": target,
         "shrinkGames": k,
+        "rookieShrinkGames": rookie_k,
+        "rookieMinGames": rookies.MIN_GAMES,
         "poolSize": fantasy.POOL_SIZE,
         # Per-game score of the 156th-best player per game; values are measured above it.
         "replacement": {fmt: round(v, 3) for fmt, v in replacement.items()},
@@ -292,7 +307,7 @@ def main():
         }
         write_json(OUT_DIR / "players" / f"{int(r.PLAYER_ID)}.json", detail)
 
-    write_fantasy(forecasts, target)
+    write_fantasy(forecasts, target, rosters)
     write_accuracy(rosters)
 
     teams = []

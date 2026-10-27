@@ -72,7 +72,10 @@ export default function Rankings({ meta, teams }: { meta: Meta; teams: Team[] })
 
   const rows = useMemo(() => {
     const filtered = allRows.filter(
-      (r) => (!team || r.p.team === team) && (!tier || (tier === 'none' ? !r.p.tier : r.p.tier === (tier as Tier))),
+      (r) =>
+        (!team || r.p.team === team) &&
+        (!tier ||
+          (tier === 'rookie' ? r.p.rookie : tier === 'none' ? !r.p.tier && !r.p.rookie : r.p.tier === (tier as Tier))),
     )
     const key: Record<SortKey, (r: Row) => number | string> = {
       value: (r) => r.value,
@@ -150,6 +153,7 @@ export default function Rankings({ meta, teams }: { meta: Meta; teams: Team[] })
           <option value="Moderate">Moderate</option>
           <option value="Risky">Risky</option>
           <option value="none">No tier</option>
+          <option value="rookie">Rookies</option>
         </Select>
       </div>
 
@@ -173,8 +177,9 @@ export default function Rankings({ meta, teams }: { meta: Meta; teams: Team[] })
               return (
                 <tr
                   key={r.p.id}
-                  onClick={() => navigate(`/player/${r.p.id}`)}
-                  className="cursor-pointer border-b border-line/60 transition last:border-0 hover:bg-surface-2"
+                  // Rookies have no player page yet (no preseason forecast).
+                  onClick={r.p.rookie ? undefined : () => navigate(`/player/${r.p.id}`)}
+                  className={`border-b border-line/60 transition last:border-0 ${r.p.rookie ? '' : 'cursor-pointer hover:bg-surface-2'}`}
                 >
                   <td className="tabular py-3 pl-4 font-display text-lg font-bold">{r.valueRank}</td>
                   <td className="py-3 pr-3">
@@ -183,6 +188,14 @@ export default function Rankings({ meta, teams }: { meta: Meta; teams: Team[] })
                     {r.p.tier && (
                       <span className="ml-2 hidden align-middle sm:inline">
                         <TierPill tier={r.p.tier} safeLow={meta.tierSafeLow} riskyLow={meta.setbackGames} />
+                      </span>
+                    )}
+                    {r.p.rookie && (
+                      <span
+                        title={`Rookie (${r.p.draftRange}): this season's stats blended with past rookies from the same draft range`}
+                        className="ml-2 inline-flex rounded-full border border-line px-2 py-0.5 align-middle text-xs font-semibold text-muted"
+                      >
+                        Rookie
                       </span>
                     )}
                   </td>
@@ -223,7 +236,10 @@ export default function Rankings({ meta, teams }: { meta: Meta; teams: Team[] })
           {fantasy.poolSize} players (12 teams × 13), with FG% and FT% weighted by attempts.
         </p>
         <p>
-          Not ranked: rookies (no NBA history yet for a forecast) and players not on a roster who haven't played this
+          Rookies are ranked once they've played {fantasy.rookieMinGames} games: their stats are blended with past
+          rookies from the same draft range
+          {fantasy.rookieShrinkGames !== null && <> (weighted like {fantasy.rookieShrinkGames} extra games)</>}, and their
+          games come from the same updated-forecast model. Not ranked: players not on a roster who haven't played this
           season.
         </p>
       </div>

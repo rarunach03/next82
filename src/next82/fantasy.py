@@ -123,18 +123,20 @@ def current_per_game() -> pd.DataFrame | None:
 
 
 def player_values(players: pd.DataFrame) -> pd.DataFrame:
-    """Per-game value in each format for `players` (PLAYER_ID index or column).
-
-    Returns per-game stats, ESPN and Yahoo points per game, and 9-category z-scores
-    per game (one column per category plus the total), for players with stats.
-    """
+    """Per-game stats for `players` (PLAYER_ID index or column) from their prior and
+    this season's games. Empty if the prior hasn't been built."""
     per_game = current_per_game()
     if per_game is None:
         return pd.DataFrame()
     ids = players.PLAYER_ID if "PLAYER_ID" in players else players.index
-    pg = per_game.reindex(pd.Index(ids)).dropna(subset=["PTS"])
-    z = nine_cat(pg)
-    return pg.assign(espn=fantasy_points(pg, "espn"), yahoo=fantasy_points(pg, "yahoo")).join(
+    return per_game.reindex(pd.Index(ids)).dropna(subset=["PTS"])
+
+
+def score(per_game: pd.DataFrame) -> pd.DataFrame:
+    """Per-game value in each format: ESPN and Yahoo points, and 9-category z-scores
+    (one column per category plus z_total) against the pool of these players."""
+    z = nine_cat(per_game)
+    return per_game.assign(espn=fantasy_points(per_game, "espn"), yahoo=fantasy_points(per_game, "yahoo")).join(
         z.add_prefix("z_")
     )
 

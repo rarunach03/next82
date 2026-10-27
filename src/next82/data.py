@@ -19,6 +19,7 @@ from datetime import datetime, timedelta
 import pandas as pd
 from nba_api.stats.endpoints import (
     commonallplayers,
+    drafthistory,
     leaguedashplayerbiostats,
     leaguedashplayerstats,
     leaguegamelog,
@@ -134,6 +135,8 @@ def fetch_current_rosters(season: str = config.FORECAST_SEASON) -> pd.DataFrame:
         "TEAM_ID": df.TEAM_ID,
         "TEAM_ABBREVIATION": df.TEAM_ABBREVIATION,
         "TEAM_FULL_NAME": df.TEAM_ID.map(full_names),
+        # First NBA season (e.g. 2026 for this season's rookies).
+        "FROM_YEAR": pd.to_numeric(df.FROM_YEAR, errors="coerce"),
         "FETCHED_AT": pd.Timestamp.now(),
     })
     path = roster_path(season)
@@ -161,6 +164,23 @@ def _write(df: pd.DataFrame, path):
     tmp = path.with_suffix(".tmp")
     df.to_parquet(tmp, index=False)
     tmp.replace(path)
+
+
+def draft_path(season: str = config.FORECAST_SEASON):
+    return config.RAW_DIR / "current_season" / f"draft_{season}.parquet"
+
+
+def fetch_draft(season: str = config.FORECAST_SEASON) -> pd.DataFrame:
+    """This season's rookie draft order (the draft held before it)."""
+    df = drafthistory.DraftHistory(season_year_nullable=season[:4], league_id="00", timeout=TIMEOUT).get_data_frames()[0]
+    out = pd.DataFrame({"PLAYER_ID": df.PERSON_ID, "PLAYER_NAME": df.PLAYER_NAME, "OVERALL_PICK": df.OVERALL_PICK})
+    _write(out, draft_path(season))
+    return out
+
+
+def saved_draft(season: str = config.FORECAST_SEASON) -> pd.DataFrame | None:
+    path = draft_path(season)
+    return pd.read_parquet(path) if path.exists() else None
 
 
 def saved_season_logs(season: str = config.FORECAST_SEASON) -> tuple[pd.DataFrame, pd.DataFrame] | None:
@@ -283,6 +303,9 @@ def refresh_current(season: str = config.FORECAST_SEASON):
     """Refresh current rosters and games played so far in the season being forecast."""
     rosters = fetch_current_rosters(season)
     print(f"Current rosters ({season}): {len(rosters)} players on {rosters.TEAM_ID.nunique()} teams")
+    time.sleep(config.REQUEST_DELAY)
+    draft = fetch_draft(season)
+    print(f"Draft {season[:4]}: {len(draft)} picks")
     time.sleep(config.REQUEST_DELAY)
     players, teams_so_far = fetch_season_to_date(season)
     if teams_so_far.empty:

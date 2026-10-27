@@ -20,6 +20,8 @@ models/*
 !data/processed/preseason_*.parquet
 !data/processed/fantasy_prior_*.parquet
 !models/fantasy_metrics.json
+!data/processed/rookie_baseline_*.parquet
+!models/rookie_metrics.json
 !models/in_season*.txt
 !models/in_season_metrics.json
 !models/metrics.json
