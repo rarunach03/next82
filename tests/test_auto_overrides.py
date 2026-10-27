@@ -104,3 +104,20 @@ def test_latest_return_is_a_slow_recovery_not_the_average():
     assert (with_latest.latest_days > with_latest.average_days).all()
     # No latest return means it can be season-ending (or of unknown length).
     assert table[table.latest_days.isna()].can_be_season_ending.all()
+
+
+def test_injury_start_uses_the_later_date_unless_already_out_at_season_end():
+    last, first = pd.Timestamp("2026-04-10"), pd.Timestamp("2026-10-26")
+    assert auto_overrides.injury_start(last, first, listed_before_season=False) == first   # offseason injury
+    assert auto_overrides.injury_start(last, first, listed_before_season=True) == last     # predates the season
+    assert auto_overrides.injury_start(pd.NaT, first, False) == first                      # no games at all
+
+
+def test_offseason_injury_counts_from_first_listing():
+    log = _log([{"PLAYER_ID": 1, "team": "A", "status": "Out", "injury_type": "fracture", "body_part": "foot fracture",
+                 "report_day": "2026-10-30"}])
+    r = _build(log, last_game={1: pd.Timestamp("2026-04-10")}).loc[1]
+    assert r.earliest_return == pd.Timestamp("2026-10-30") + pd.Timedelta(days=55)
+    end = pd.DataFrame({"PLAYER_ID": [1], "status": ["Out"], "injury_type": ["surgery"]})
+    r = auto_overrides.build(log, RECOVERY, NO_NEWS, [], pd.Series({1: pd.Timestamp("2026-04-10")}), None, TODAY, end)[0].iloc[0]
+    assert r.earliest_return == TODAY  # counted from April: overdue, back any day

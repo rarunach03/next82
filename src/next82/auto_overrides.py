@@ -4,8 +4,12 @@ A player listed Out with a serious injury type in the recovery table
 (data/recovery_table.csv) gets an override built like the manual ones:
     earliest return = injury start + the table's fast-end days
     latest return   = start + the table's latest days, or none if it can be season-ending
-The injury start is the player's last game played (this season, or before it), since
-the injury usually happened before he first appears on the report.
+The injury start is the later of the player's last game played and his first
+appearance on this season's report with this injury, so an offseason injury isn't
+counted from April. The exception is a player already listed Out with an injury on the
+last day of the previous regular season (when every team plays, so everyone injured
+is listed; the wording then is often generic, like "knee surgery"): his injury
+predates the season, so it's counted from his last game.
 
 A team-announced timeline in data/news_timelines.csv replaces the table's estimate
 (it's no longer an estimate). Manual rows in data/overrides.csv always win.
@@ -25,8 +29,12 @@ from next82.overrides import COLUMNS
 RECOVERY_PATH = config.ROOT / "data" / "recovery_table.csv"
 NEWS_PATH = config.ROOT / "data" / "news_timelines.csv"
 LAST_GAME_PATH = config.PROCESSED_DIR / f"last_game_before_{config.FORECAST_SEASON}.parquet"
+# Parsed facts of the injury report from the previous season's last regular-season day.
+END_OF_LAST_SEASON_PATH = config.PROCESSED_DIR / f"injuries_end_of_season_before_{config.FORECAST_SEASON}.parquet"
 # Still out after the latest typical return: assume he's back within this many days.
 OVERDUE_WINDOW_DAYS = 14
+# Statuses on the end-of-season report that aren't injuries.
+NOT_AN_INJURY = ["rest", "not injury", "illness", "personal", "suspension"]
 NEWS_COLUMNS = ["player_id", "earliest_return", "latest_return", "note", "source_url", "date_found"]
 
 
@@ -73,9 +81,24 @@ def last_games(player_games: pd.DataFrame | None, before_season: pd.DataFrame | 
     return out
 
 
+def injury_start(last_game, first_listed, listed_before_season: bool):
+    """When the recovery clock starts (see module docstring)."""
+    if pd.isna(last_game):
+        return first_listed
+    if listed_before_season or pd.isna(first_listed):
+        return last_game
+    return max(last_game, first_listed)
+
+
 def build(log: pd.DataFrame | None, recovery: pd.DataFrame, news: pd.DataFrame, manual_ids, last_game: pd.Series,
-          player_games: pd.DataFrame | None, today: pd.Timestamp) -> tuple[pd.DataFrame, list[str]]:
+          player_games: pd.DataFrame | None, today: pd.Timestamp,
+          end_of_last_season: pd.DataFrame | None = None) -> tuple[pd.DataFrame, list[str]]:
     """Override rows (same columns as overrides.csv, plus 'kind') and log lines."""
+    already_out = set()
+    if end_of_last_season is not None and len(end_of_last_season):
+        e = end_of_last_season[(end_of_last_season.status == "Out") & end_of_last_season.PLAYER_ID.notna()
+                               & ~end_of_last_season.injury_type.isin(NOT_AN_INJURY)]
+        already_out = set(e.PLAYER_ID.astype(int))
     rows, lines = [], []
     if log is None or log.empty:
         return pd.DataFrame(columns=[*COLUMNS, "kind"]), lines
@@ -96,12 +119,8 @@ def build(log: pd.DataFrame | None, recovery: pd.DataFrame, news: pd.DataFrame, 
         news_row = news_by_id.get(pid)
         if table is None and news_row is None:
             continue  # short-term or unknown types: the model handles those
-        # Injury start: the last game played (he was hurt then or after); his first
-        # listing if he has no games at all.
         first_listed = log[(log.PLAYER_ID == r.PLAYER_ID) & (log.injury_type == r.injury_type)].report_day.min()
-        start = last_game.get(pid, pd.NaT)
-        if pd.isna(start):
-            start = first_listed
+        start = injury_start(last_game.get(pid, pd.NaT), first_listed, pid in already_out)
         if news_row is not None:
             earliest, latest, estimated = news_row.earliest_return, news_row.latest_return, False
             note = f"{injuries.clean_reason(r.reason)}. Team timeline: {news_row.note}"
@@ -112,7 +131,10 @@ def build(log: pd.DataFrame | None, recovery: pd.DataFrame, news: pd.DataFrame, 
                       if not table.can_be_season_ending and pd.notna(table.latest_days) else pd.NaT)
             estimated = True
             note = (f"{injuries.clean_reason(r.reason)} (NBA injury report, {r.report_day:%b %-d}). {table.basis} "
-                    f"Counted from the last game played, {start:%b %-d, %Y}.")
+                    f"Counted from {start:%b %-d, %Y}"
+                    + (" (his last game; he was already out with it at the end of last season)."
+                       if pid in already_out else
+                       " (the later of his last game and his first listing with this injury)."))
             # Still out past the typical recovery: he could be back any time.
             if earliest < today:
                 note += " He's past the typical recovery time, so a return could come any day."
@@ -137,16 +159,28 @@ def current(manual: pd.DataFrame, today: pd.Timestamp) -> tuple[pd.DataFrame, li
     logs = data.saved_season_logs()
     before = pd.read_parquet(LAST_GAME_PATH) if LAST_GAME_PATH.exists() else None
     player_games = logs[0] if logs is not None else None
+    end = pd.read_parquet(END_OF_LAST_SEASON_PATH) if END_OF_LAST_SEASON_PATH.exists() else None
     return build(injuries.saved_log(), load_recovery(), load_news(), manual.player_id, last_games(player_games, before),
-                 player_games, today)
+                 player_games, today, end)
 
 
 def main():
-    """Each player's last game before the season in progress (from the raw history)."""
+    """Each player's last game before the season in progress, and the injury report from
+    the last regular-season day before it (both from history; built once per season)."""
+    from next82 import injury_history
+
     games = data.load("player_games")[["PLAYER_ID", "GAME_DATE"]]
     last = games.assign(GAME_DATE=pd.to_datetime(games.GAME_DATE.astype(str).str[:10])).groupby("PLAYER_ID").GAME_DATE.max()
     last.reset_index().to_parquet(LAST_GAME_PATH, index=False)
     print(f"Saved {LAST_GAME_PATH.relative_to(config.ROOT)} ({len(last):,} players)")
+
+    previous = config.SEASONS[-1]
+    team_games = data.load("team_games", [previous])
+    final_day = pd.to_datetime(team_games.GAME_DATE.astype(str).str[:10]).max()
+    report = injury_history.cached_day(final_day, previous)
+    report.to_parquet(END_OF_LAST_SEASON_PATH, index=False)
+    print(f"Saved {END_OF_LAST_SEASON_PATH.relative_to(config.ROOT)}: {final_day:%Y-%m-%d} report, "
+          f"{(report.status == 'Out').sum()} players out")
 
 
 if __name__ == "__main__":
