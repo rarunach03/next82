@@ -60,5 +60,27 @@
     "n_healthy": 164,
     "mae_healthy_two_part": 15.093603952584262,
     "mae_healthy_main_model": 30.83624480665665
+  },
+  "ranges": {
+    "all players": {
+      "n": 952,
+      "coverage": 0.8140756302521008,
+      "avg_width": 52.231582287900174
+    },
+    "rotation players": {
+      "n": 606,
+      "coverage": 0.8085808580858086,
+      "avg_width": 47.718847364320396
+    },
+    "comeback players": {
+      "n": 31,
+      "coverage": 0.7741935483870968,
+      "avg_width": 50.41812802952171
+    },
+    "everyone else": {
+      "n": 921,
+      "coverage": 0.8154180238870793,
+      "avg_width": 52.29262146489227
+    }
   }
 }

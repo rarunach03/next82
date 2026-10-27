@@ -47,5 +47,42 @@
       "Blend of pace and preseason": 7.643762292850602,
       "Rest-of-season model": 6.637556828881635
     }
+  },
+  "range_adjustments": [
+    3.8406877651483475e-10,
+    0.00219598337913929,
+    0.006302219158538347
+  ],
+  "range_calibration": {
+    "all": {
+      "n": 12376,
+      "coverage": 0.8135908209437621,
+      "avg_width": 24.25778559544486
+    },
+    "first third": {
+      "n": 4744,
+      "coverage": 0.8098650927487352,
+      "avg_width": 38.54802201061875
+    },
+    "middle third": {
+      "n": 3735,
+      "coverage": 0.8099062918340026,
+      "avg_width": 22.247653934121974
+    },
+    "last third": {
+      "n": 3897,
+      "coverage": 0.8216576853990248,
+      "avg_width": 8.788183388992726
+    },
+    "currently out (5+ games)": {
+      "n": 1730,
+      "coverage": 0.8560693641618498,
+      "avg_width": 20.66065972931202
+    },
+    "hasn't played yet": {
+      "n": 1933,
+      "coverage": 0.8173823072943611,
+      "avg_width": 39.472056607439434
+    }
   }
 }

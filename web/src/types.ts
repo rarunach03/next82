@@ -30,8 +30,12 @@ export interface Meta {
   generatedAt: string
   games: number
   setbackGames: number
+  /** Tier cutoffs on the low end of the likely range: Safe at this many games or more. */
+  tierSafeLow: number
   accuracy: Accuracy
 }
+
+export type Tier = 'Safe' | 'Moderate' | 'Risky'
 
 export interface Team {
   abbr: string
@@ -69,6 +73,15 @@ export interface PlayerSummary {
   gamesLeft: number | null
   /** Team games since the player's last game (null if they haven't played this season). */
   absenceStreak: number | null
+  /** Likely ranges (10th-90th percentile) of the preseason and updated forecasts. */
+  preLow: number | null
+  preHigh: number | null
+  updatedLow: number | null
+  updatedHigh: number | null
+  /** From the low end of the latest likely range; null if not on a roster and no games. */
+  tier: Tier | null
+  /** Not on any current roster. */
+  notOnRoster: boolean
 }
 
 export interface Factor {

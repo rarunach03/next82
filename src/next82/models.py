@@ -61,6 +61,18 @@ def lightgbm():
     )
 
 
+def quantile_model(alpha: float):
+    """Same settings as the main model, predicting the `alpha` quantile instead of the median."""
+    return lightgbm().set_params(objective="quantile", alpha=alpha)
+
+
+def fit_quantiles(df: pd.DataFrame, features: list[str] = FEATURES) -> tuple:
+    """Models for the low and high ends of the likely range (10th and 90th percentiles)."""
+    from next82.intervals import HIGH, LOW
+
+    return tuple(quantile_model(a).fit(df[features], df[TARGET]) for a in (LOW, HIGH))
+
+
 MODELS = {
     "Same as last year": SameAsLastYear,
     "3-year average": ThreeYearAverage,

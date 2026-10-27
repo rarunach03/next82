@@ -15,6 +15,10 @@
   --color-up: #3987e5;
   --color-down: #e66767;
   --color-played: #3987e5;
+  /* Availability tiers (status colors, always shown with their label). */
+  --color-safe: #3fbf5f;
+  --color-moderate: #fab219;
+  --color-risky: #ff6b6b;
 
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Barlow Condensed", "Inter", ui-sans-serif, sans-serif;

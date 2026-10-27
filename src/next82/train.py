@@ -26,7 +26,7 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics import brier_score_loss, roc_auc_score
 
-from next82 import config, data, evaluate, explain, models
+from next82 import config, data, evaluate, explain, intervals, models
 from next82.features import FEATURES, TARGET, load_table
 
 FINAL_MODEL = "LightGBM"
@@ -35,6 +35,7 @@ METRICS_PATH = config.MODELS_DIR / "metrics.json"
 FORECASTS_PATH = config.PROCESSED_DIR / "forecasts.parquet"
 HISTORY_PATH = config.PROCESSED_DIR / "history.parquet"
 PAST_COMEBACKS_PATH = config.PROCESSED_DIR / "past_comebacks.parquet"
+RANGES_PATH = config.PROCESSED_DIR / "forecast_ranges.parquet"
 
 # Comeback seasons are rare, so the comeback models are scored season by season:
 # each season from here on is predicted by models trained only on earlier seasons.
@@ -94,6 +95,39 @@ def evaluate_comebacks(df: pd.DataFrame) -> dict:
     return out
 
 
+def predict_range(quantiles, adjustment: float, point: np.ndarray, rows: pd.DataFrame):
+    """Likely range as a share of the season: quantile models, conformal correction, tidied."""
+    low, high = (np.asarray(m.predict(rows[FEATURES])) for m in quantiles)
+    return intervals.tidy(low - adjustment, point, high + adjustment, floor=0, ceiling=1)
+
+
+def preseason_ranges(df: pd.DataFrame) -> tuple[float, dict]:
+    """Measure the conformal correction on the validation season, then check coverage
+    on the test seasons. Returns the correction and the test calibration table."""
+    train, test = evaluate.split(df)
+    val_idx = train.season_idx.max()
+    fit_part, val = train[train.season_idx < val_idx], train[train.season_idx == val_idx]
+    low, high = (m.predict(val[FEATURES]) for m in models.fit_quantiles(fit_part))
+    adjustment = intervals.conformal_adjustment(low, high, val[TARGET])
+
+    point = models.predict(models.fit(FINAL_MODEL, train), test)
+    low, high = predict_range(models.fit_quantiles(train), adjustment, point, test)
+    raw_low, raw_high = (m.predict(test[FEATURES]) for m in models.fit_quantiles(train))
+    crossed = int((raw_low > raw_high).sum())
+    games = test.season_games_next.to_numpy()
+    actual = test[TARGET].to_numpy() * games
+    table = intervals.calibration_table(low * games, high * games, actual, {
+        "all players": np.ones(len(test), bool),
+        "rotation players": evaluate.is_rotation(test).to_numpy(),
+        "comeback players": (test.missed_season == 1).to_numpy(),
+        "everyone else": (test.missed_season == 0).to_numpy(),
+    })
+    print(f"\nPreseason ranges: conformal correction {adjustment * 82:+.1f} games per side "
+          f"(measured on {config.SEASONS[val_idx]}); low above high before tidying: {crossed} of {len(test)}")
+    intervals.print_calibration(f"Test seasons {test.SEASON.min()} and {test.SEASON.max()}", table)
+    return adjustment, table
+
+
 def _add_shap(rows: pd.DataFrame, model) -> pd.DataFrame:
     values, base = explain.shap_values(model, rows)
     rows = rows.copy()
@@ -143,12 +177,20 @@ def main():
     df = load_table()
     metrics = run_evaluation(df)
     metrics["comeback"] = evaluate_comebacks(df)
+    adjustment, metrics["ranges"] = preseason_ranges(df)
     final_models, forecasts = train_final(df)
+
+    # Likely ranges for the forecasts, from preseason data only.
+    quantiles = models.fit_quantiles(df[~df.is_forecast])
+    low, high = predict_range(quantiles, adjustment, forecasts.pred_share.to_numpy(), forecasts)
+    ranges = pd.DataFrame({"PLAYER_ID": forecasts.PLAYER_ID.to_numpy(), "low_games": low * explain.GAMES,
+                           "high_games": high * explain.GAMES})
 
     config.MODELS_DIR.mkdir(exist_ok=True)
     joblib.dump(final_models, MODEL_PATH)
     METRICS_PATH.write_text(json.dumps(metrics, indent=2))
     forecasts.to_parquet(FORECASTS_PATH, index=False)
+    ranges.to_parquet(RANGES_PATH, index=False)
     season_history().to_parquet(HISTORY_PATH, index=False)
     past_comebacks(df).to_parquet(PAST_COMEBACKS_PATH, index=False)
     print(f"\nSaved {len(forecasts)} forecasts for the season after {forecasts.SEASON.iloc[0]}")

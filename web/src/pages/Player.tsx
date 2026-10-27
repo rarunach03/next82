@@ -1,6 +1,8 @@
 import { Link, useParams } from 'react-router'
 import FactorChart from '../components/FactorChart'
 import HistoryChart from '../components/HistoryChart'
+import RangeBar from '../components/RangeBar'
+import TierPill from '../components/TierPill'
 import { playedText, shortDate, soFarText, usePlayer } from '../data'
 import type { Meta } from '../types'
 
@@ -35,6 +37,12 @@ export default function Player({ meta }: { meta: Meta }) {
           {p.team && p.team !== p.lastTeam && <span className="text-faint"> · played for {p.lastTeam} in {meta.dataThrough}</span>}
           {!p.team && <span className="text-faint"> · last team {p.lastTeam}</span>}
         </p>
+        {p.tier && (
+          <p className="mt-3 flex items-center gap-2 text-sm text-muted">
+            <TierPill tier={p.tier} safeLow={meta.tierSafeLow} riskyLow={meta.setbackGames} />
+            {tierText(p.tier, meta.tierSafeLow, meta.setbackGames)}
+          </p>
+        )}
       </header>
 
       <section className={`mt-8 grid gap-px overflow-hidden rounded-2xl border border-line bg-line sm:grid-cols-2 ${p.comeback ? 'lg:grid-cols-4' : 'lg:grid-cols-3'}`}>
@@ -46,7 +54,12 @@ export default function Player({ meta }: { meta: Meta }) {
               label="Preseason forecast, if healthy"
               note="Made before the season · fixed"
               accent
-            />
+            >
+              {p.preLow !== null && p.preHigh !== null && (
+                <RangeBar low={p.preLow} point={Math.min(p.ifHealthy ?? p.forecast, p.preHigh)} high={p.preHigh} accent />
+              )}
+              <p className="mt-1 text-xs text-faint">The likely range includes the chance of a setback.</p>
+            </BigStat>
             <BigStat
               value={Math.round((p.setbackChance ?? 0) * 100)}
               unit="%"
@@ -60,17 +73,25 @@ export default function Player({ meta }: { meta: Meta }) {
             label="Preseason forecast"
             note={`Made before the season · fixed · ${change >= 0 ? '+' : '−'}${Math.abs(change)} vs. ${meta.dataThrough}`}
             accent
-          />
+          >
+            {p.preLow !== null && p.preHigh !== null && <RangeBar low={p.preLow} point={p.forecast} high={p.preHigh} accent />}
+          </BigStat>
         )}
-        {p.updated !== null && (
+        {p.updated !== null ? (
           <BigStat
             value={Math.round(p.updated)}
             unit="games"
-            label="Updated forecast"
+            label={p.comeback ? 'Updated forecast, setback risk included' : 'Updated forecast'}
             note={`${p.playedSoFar ?? 0} played + ${Math.round(p.updatedRest ?? 0)} more of ${p.gamesLeft} left${
               meta.updatedAsOf ? ` · as of ${shortDate(meta.updatedAsOf)}` : ''
             }`}
-          />
+          >
+            {p.updatedLow !== null && p.updatedHigh !== null && (
+              <RangeBar low={p.updatedLow} point={p.updated} high={p.updatedHigh} />
+            )}
+          </BigStat>
+        ) : (
+          p.notOnRoster && <BigText label="Updated forecast" text="Not on a roster" note="No games this season" />
         )}
         {soFar ? (
           <BigStat
@@ -170,13 +191,43 @@ export default function Player({ meta }: { meta: Meta }) {
   )
 }
 
-/** "Hasn't played in his team's last 6 games" style note, only for real absences. */
+function tierText(tier: string, safeLow: number, riskyLow: number): string {
+  if (tier === 'Safe') return `Even a bad outcome is ${safeLow}+ games.`
+  if (tier === 'Risky') return `A bad outcome is fewer than ${riskyLow} games.`
+  return `A bad outcome is ${riskyLow}–${safeLow} games.`
+}
+
+/** "Out for the team's last 6 games" style note, only for real absences. */
 function streakNote(streak: number | null): string | undefined {
   if (streak === null || streak < 2) return undefined
   return `Out for the team's last ${streak} games`
 }
 
-function BigStat({ value, unit, label, note, accent = false }: { value: number; unit: string; label: string; note?: string; accent?: boolean }) {
+function BigText({ label, text, note }: { label: string; text: string; note?: string }) {
+  return (
+    <div className="bg-surface px-6 py-6">
+      <div className="text-sm text-muted">{label}</div>
+      <div className="mt-2 font-display text-3xl leading-tight font-bold">{text}</div>
+      {note && <div className="mt-2 text-sm text-faint">{note}</div>}
+    </div>
+  )
+}
+
+function BigStat({
+  value,
+  unit,
+  label,
+  note,
+  accent = false,
+  children,
+}: {
+  value: number
+  unit: string
+  label: string
+  note?: string
+  accent?: boolean
+  children?: React.ReactNode
+}) {
   return (
     <div className="bg-surface px-6 py-6">
       <div className="text-sm text-muted">{label}</div>
@@ -185,6 +236,7 @@ function BigStat({ value, unit, label, note, accent = false }: { value: number; 
         <span className="text-lg text-muted">{unit}</span>
       </div>
       {note && <div className="mt-2 text-sm text-faint">{note}</div>}
+      {children}
     </div>
   )
 }

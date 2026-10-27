@@ -17,7 +17,7 @@ import pandas as pd
 
 from next82 import config, data, in_season
 from next82.explain import GAMES, similar_comebacks, top_factors
-from next82.preseason import load_forecasts
+from next82.preseason import load_forecasts, load_ranges
 from next82.train import HISTORY_PATH, METRICS_PATH, PAST_COMEBACKS_PATH
 
 OUT_DIR = config.ROOT / "web" / "public" / "data"
@@ -77,6 +77,15 @@ def in_season_accuracy() -> dict:
     }
 
 
+def tier(low_games) -> str | None:
+    """Safe / Moderate / Risky from the low end of the likely range (see config)."""
+    if pd.isna(low_games):
+        return None
+    if low_games >= config.TIER_SAFE_LOW:
+        return "Safe"
+    return "Risky" if low_games < config.SETBACK_GAMES else "Moderate"
+
+
 def round_or_none(value, digits=1):
     return None if pd.isna(value) else round(float(value), digits)
 
@@ -121,16 +130,33 @@ def main():
         forecasts["team_games_so_far"] = None
         season_started, so_far_through = False, None
 
+    # Likely ranges (10th-90th percentile) of the frozen preseason forecast.
+    ranges = load_ranges()
+    if ranges is not None:
+        forecasts = forecasts.merge(ranges, on="PLAYER_ID", how="left")
+    else:
+        forecasts["low_games"] = forecasts["high_games"] = None
+
     # Rest-of-season forecast: games so far + predicted games still to come.
     updated = in_season.predict_current()
     updated_as_of = None
+    updated_cols = ["updated_total", "predicted_rest", "team_games_left", "absence_streak", "has_played",
+                    "updated_low", "updated_high"]
     if updated is not None:
         updated_as_of = updated.as_of.iloc[0]
-        cols = ["PLAYER_ID", "updated_total", "predicted_rest", "team_games_left", "absence_streak", "has_played"]
+        cols = ["PLAYER_ID", *[c for c in updated_cols if c in updated]]
         forecasts = forecasts.merge(updated[cols], on="PLAYER_ID", how="left")
-    else:
-        for c in ["updated_total", "predicted_rest", "team_games_left", "absence_streak", "has_played"]:
+    for c in updated_cols:
+        if c not in forecasts:
             forecasts[c] = None
+    # Not on a roster and no games this season: an updated forecast would just assume
+    # they sign somewhere, so the site says "Not on a roster" instead.
+    forecasts["not_on_roster"] = forecasts.TEAM_ABBREVIATION_NOW.isna()
+    unsigned = forecasts.not_on_roster & (forecasts.played_so_far.fillna(0) == 0)
+    forecasts.loc[unsigned, updated_cols] = None
+    # The tier follows the latest forecast: updated if there is one, else preseason.
+    forecasts["tier"] = [tier(lo) for lo in forecasts.updated_low.where(forecasts.updated_low.notna(), forecasts.low_games)]
+    forecasts.loc[unsigned, "tier"] = None
 
     comeback = forecasts.missed_season == 1
     forecasts["shown"] = forecasts.games_if_healthy.where(comeback, forecasts.pred_games)
@@ -166,6 +192,12 @@ def main():
             "gamesLeft": None if pd.isna(r.team_games_left) else int(r.team_games_left),
             # Team games since the player's last game, once they've played this season.
             "absenceStreak": int(r.absence_streak) if pd.notna(r.absence_streak) and r.has_played == 1 else None,
+            "preLow": round_or_none(r.low_games, 0),
+            "preHigh": round_or_none(r.high_games, 0),
+            "updatedLow": round_or_none(r.updated_low, 0),
+            "updatedHigh": round_or_none(r.updated_high, 0),
+            "tier": r.tier,
+            "notOnRoster": bool(r.not_on_roster),
         }
         players.append(summary)
 
@@ -213,6 +245,7 @@ def main():
             "generatedAt": datetime.now().isoformat(timespec="seconds"),
             "games": GAMES,
             "setbackGames": config.SETBACK_GAMES,
+            "tierSafeLow": config.TIER_SAFE_LOW,
             "accuracy": {
                 "modelMae": round(model_mae, 1),
                 "modelMedianError": round(results[metrics["final_model"]]["median_error_all"], 1),

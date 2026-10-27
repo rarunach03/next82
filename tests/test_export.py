@@ -46,3 +46,21 @@ def test_search_text_is_accent_free(out):
     index = json.loads((out / "index.json").read_text())
     jokic = next(p for p in index["players"] if p["name"] == "Nikola Jokić")
     assert jokic["search"] == "nikola jokic"
+
+
+def test_ranges_are_ordered_and_contain_the_forecast(out):
+    index = json.loads((out / "index.json").read_text())
+    for p in index["players"]:
+        if p["preLow"] is not None:
+            assert p["preLow"] <= p["preHigh"]
+            assert p["preLow"] - 0.5 <= p["forecast"] <= p["preHigh"] + 0.5
+        if p["updatedLow"] is not None:
+            assert p["updatedLow"] <= p["updatedHigh"]
+            assert p["updatedLow"] - 0.5 <= p["updated"] <= p["updatedHigh"] + 0.5
+
+
+def test_unsigned_players_without_games_have_no_updated_forecast(out):
+    index = json.loads((out / "index.json").read_text())
+    unsigned = [p for p in index["players"] if p["notOnRoster"] and not p["playedSoFar"]]
+    assert unsigned
+    assert all(p["updated"] is None and p["tier"] is None for p in unsigned)

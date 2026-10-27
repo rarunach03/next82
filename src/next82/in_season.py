@@ -22,10 +22,12 @@ import lightgbm as lgb
 import numpy as np
 import pandas as pd
 
-from next82 import config, data, models
+from next82 import config, data, intervals, models
 from next82.features import FEATURES, load_table
 
 MODEL_PATH = config.MODELS_DIR / "in_season.txt"
+# Low and high ends of the likely range (10th and 90th percentiles).
+RANGE_MODEL_PATHS = (config.MODELS_DIR / "in_season_low.txt", config.MODELS_DIR / "in_season_high.txt")
 METRICS_PATH = config.MODELS_DIR / "in_season_metrics.json"
 SNAPSHOTS_PATH = config.PROCESSED_DIR / "in_season_snapshots.parquet"
 
@@ -212,6 +214,53 @@ def predict_rest(booster_or_model, snaps: pd.DataFrame) -> np.ndarray:
     return share * snaps.team_games_left.to_numpy()
 
 
+THIRDS = ["first third", "middle third", "last third"]
+
+
+def season_third(progress) -> np.ndarray:
+    """0, 1 or 2: which third of the season a snapshot falls in."""
+    return np.minimum((np.asarray(progress, dtype=float) * 3).astype(int), 2)
+
+
+def fit_range(snaps: pd.DataFrame, **params) -> tuple:
+    """Quantile models for the low and high ends of the rest-of-season share."""
+    return tuple(
+        model(**(params | {"objective": "quantile", "alpha": a})).fit(
+            snaps[IN_SEASON_FEATURES], snaps.target, sample_weight=snaps.team_games_left
+        )
+        for a in (intervals.LOW, intervals.HIGH)
+    )
+
+
+def range_adjustments(range_models, val: pd.DataFrame) -> list[float]:
+    """Conformal correction (in share of games left) for each third of the season.
+
+    Early-season outcomes are much more uncertain, so each third gets its own
+    correction; that keeps ranges honest (and wide) when few games have been played.
+    """
+    low, high = (m.predict(val[IN_SEASON_FEATURES]) for m in range_models)
+    third = season_third(val.season_progress)
+    return [intervals.conformal_adjustment(low[third == t], high[third == t], val.target[third == t]) for t in range(3)]
+
+
+def predict_range(range_models, adjustments, point_rest: np.ndarray, snaps: pd.DataFrame):
+    """Likely range of games still to come: quantile models + per-third correction, tidied."""
+    left = snaps.team_games_left.to_numpy()
+    adj = np.asarray(adjustments)[season_third(snaps.season_progress)]
+    low, high = (np.asarray(m.predict(snaps[IN_SEASON_FEATURES])) for m in range_models)
+    return intervals.tidy((low - adj) * left, point_rest, (high + adj) * left, floor=0, ceiling=left)
+
+
+def range_groups(snaps: pd.DataFrame) -> dict:
+    third = season_third(snaps.season_progress)
+    return {
+        "all": np.ones(len(snaps), bool),
+        **{name: third == t for t, name in enumerate(THIRDS)},
+        f"currently out ({OUT_STREAK_GAMES}+ games)": ((snaps.has_played == 1) & (snaps.absence_streak >= OUT_STREAK_GAMES)).to_numpy(),
+        "hasn't played yet": (snaps.has_played == 0).to_numpy(),
+    }
+
+
 # Baselines for the rest of the season, in games.
 def baseline_preseason(snaps):
     """The preseason forecast share, applied to the games left."""
@@ -307,6 +356,13 @@ def predict_current(models_dir=config.MODELS_DIR) -> pd.DataFrame | None:
     booster = lgb.Booster(model_file=str(path))
     snap["predicted_rest"] = np.clip(booster.predict(snap[IN_SEASON_FEATURES]), 0, 1) * snap.team_games_left
     snap["updated_total"] = snap.played_so_far + snap.predicted_rest
+    range_paths = [models_dir / p.name for p in RANGE_MODEL_PATHS]
+    if all(p.exists() for p in range_paths) and METRICS_PATH.exists():
+        adjustments = json.loads((models_dir / METRICS_PATH.name).read_text())["range_adjustments"]
+        range_models = [lgb.Booster(model_file=str(p)) for p in range_paths]
+        low, high = predict_range(range_models, adjustments, snap.predicted_rest.to_numpy(), snap)
+        snap["updated_low"] = snap.played_so_far + low
+        snap["updated_high"] = snap.played_so_far + high
     snap["as_of"] = date - pd.Timedelta(days=1)
     return snap
 
@@ -323,12 +379,26 @@ def main():
     print(f"\nTest seasons {' and '.join(TEST_SEASONS)}: average miss in rest-of-season games")
     print_scorecard(card)
 
+    # Likely ranges: corrections measured on the validation season, coverage checked on test.
+    val_train, val = snaps[snaps.SEASON < VALIDATION_SEASON], snaps[snaps.SEASON == VALIDATION_SEASON]
+    adjustments = range_adjustments(fit_range(val_train, **params), val)
+    range_models = fit_range(train, **params)
+    raw_low, raw_high = (m.predict(test[IN_SEASON_FEATURES]) for m in range_models)
+    low, high = predict_range(range_models, adjustments, predict_rest(fit(train, **params), test), test)
+    calibration = intervals.calibration_table(low, high, test.games_after, range_groups(test))
+    print(f"\nRange corrections per third (share of games left): {', '.join(f'{a:+.3f}' for a in adjustments)}; "
+          f"low above high before tidying: {int((raw_low > raw_high).sum())} of {len(test)}")
+    intervals.print_calibration(f"Rest-of-season ranges, test seasons {' and '.join(TEST_SEASONS)}", calibration)
+
     final = fit(snaps, **params)
     config.MODELS_DIR.mkdir(exist_ok=True)
     final.booster_.save_model(str(MODEL_PATH))
+    for m, path in zip(fit_range(snaps, **params), RANGE_MODEL_PATHS):
+        m.booster_.save_model(str(path))
     METRICS_PATH.write_text(json.dumps({
         "snapshot_days": SNAPSHOT_DAYS, "validation_season": VALIDATION_SEASON, "test_seasons": TEST_SEASONS,
         "blend_k": k, "params": params, "test": card,
+        "range_adjustments": adjustments, "range_calibration": calibration,
     }, indent=2))
     print(f"\nSaved {MODEL_PATH.relative_to(config.ROOT)} (trained on all {snaps.SEASON.nunique()} seasons)")
 

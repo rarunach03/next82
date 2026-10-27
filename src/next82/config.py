@@ -52,3 +52,8 @@ SETBACK_GAMES = 20
 # Length of a normal regular season. Used for the season in progress, whose
 # schedule may still list some games as undecided (e.g. NBA Cup knockout games).
 REGULAR_SEASON_GAMES = 82
+
+# Availability tiers, from the low end (10th percentile) of a player's likely range:
+# Safe if even a bad outcome is TIER_SAFE_LOW+ games, Risky if a bad outcome is a
+# setback season (fewer than SETBACK_GAMES), Moderate in between.
+TIER_SAFE_LOW = 45

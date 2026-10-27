@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { playedText, soFarText } from '../data'
+import TierPill from './TierPill'
 import type { PlayerSummary } from '../types'
 
 const PAGE = 50
@@ -57,6 +58,11 @@ export default function Leaderboard({
                   {p.name}
                 </Link>
                 {showTeam && <span className="ml-2 text-xs text-faint">{p.team ?? 'No team'}</span>}
+                {p.tier && (
+                  <span className="ml-2 hidden align-middle lg:inline">
+                    <TierPill tier={p.tier} />
+                  </span>
+                )}
               </td>
               <td className="tabular hidden py-3 pr-3 text-muted sm:table-cell">{p.age}</td>
               <td className="tabular hidden py-3 pr-3 text-muted md:table-cell">
@@ -71,7 +77,7 @@ export default function Leaderboard({
               {seasonStarted && (
                 <td className="tabular hidden py-3 pr-4 sm:table-cell">
                   {p.updated === null ? (
-                    <span className="text-faint">—</span>
+                    <span className="text-xs text-faint">{p.notOnRoster ? 'Not on a roster' : '—'}</span>
                   ) : (
                     <>
                       <span className="font-display text-lg font-bold">{Math.round(p.updated)}</span>
@@ -96,11 +102,14 @@ export default function Leaderboard({
   )
 }
 
-/** Change from the preseason forecast (the comeback forecast counts its setback risk). */
+/**
+ * Change from the preseason forecast, shown only when the updated forecast falls
+ * outside the preseason's likely range, so early-season noise doesn't look like news.
+ */
 function UpdatedChange({ player: p }: { player: PlayerSummary }) {
-  if (p.updated === null) return null
+  if (p.updated === null || p.preLow === null || p.preHigh === null) return null
+  if (p.updated >= p.preLow && p.updated <= p.preHigh) return null
   const diff = Math.round(p.updated - p.forecast)
-  if (Math.abs(diff) < 2) return null
   return (
     <span className={`ml-1.5 text-xs ${diff > 0 ? 'text-up' : 'text-down'}`}>
       {diff > 0 ? '▲' : '▼'} {Math.abs(diff)}
