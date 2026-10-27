@@ -20,6 +20,7 @@ import pandas as pd
 from nba_api.stats.endpoints import (
     commonallplayers,
     drafthistory,
+    scheduleleaguev2,
     leaguedashplayerbiostats,
     leaguedashplayerstats,
     leaguegamelog,
@@ -166,6 +167,33 @@ def _write(df: pd.DataFrame, path):
     tmp.replace(path)
 
 
+def schedule_path(season: str = config.FORECAST_SEASON):
+    return config.RAW_DIR / "current_season" / f"schedule_{season}.parquet"
+
+
+def fetch_schedule(season: str = config.FORECAST_SEASON) -> pd.DataFrame:
+    """This season's regular-season schedule, one row per team per game (past and future).
+
+    Games whose teams aren't decided yet (e.g. NBA Cup knockout games) have team ID 0
+    and are left out, so teams can show fewer than 82 games until they're set.
+    """
+    g = scheduleleaguev2.ScheduleLeagueV2(season=season, league_id="00", timeout=TIMEOUT).get_data_frames()[0]
+    g = g[g.gameId.astype(str).str.startswith("002")]
+    date = pd.to_datetime(g.gameDateEst.astype(str).str[:10])
+    rows = pd.concat([
+        pd.DataFrame({"TEAM_ID": g.homeTeam_teamId, "GAME_ID": g.gameId, "GAME_DATE": date}),
+        pd.DataFrame({"TEAM_ID": g.awayTeam_teamId, "GAME_ID": g.gameId, "GAME_DATE": date}),
+    ])
+    rows = rows[rows.TEAM_ID != 0].sort_values(["TEAM_ID", "GAME_DATE"]).reset_index(drop=True)
+    _write(rows, schedule_path(season))
+    return rows
+
+
+def saved_schedule(season: str = config.FORECAST_SEASON) -> pd.DataFrame | None:
+    path = schedule_path(season)
+    return pd.read_parquet(path) if path.exists() else None
+
+
 def draft_path(season: str = config.FORECAST_SEASON):
     return config.RAW_DIR / "current_season" / f"draft_{season}.parquet"
 
@@ -306,6 +334,9 @@ def refresh_current(season: str = config.FORECAST_SEASON):
     time.sleep(config.REQUEST_DELAY)
     draft = fetch_draft(season)
     print(f"Draft {season[:4]}: {len(draft)} picks")
+    time.sleep(config.REQUEST_DELAY)
+    schedule = fetch_schedule(season)
+    print(f"Schedule: {schedule.GAME_ID.nunique()} games with both teams set")
     time.sleep(config.REQUEST_DELAY)
     players, teams_so_far = fetch_season_to_date(season)
     if teams_so_far.empty:

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { Fantasy, Index, PlayerDetail, PlayerSummary, SeasonAccuracy } from './types'
+import type { Fantasy, Index, Override, PlayerDetail, PlayerSummary, SeasonAccuracy } from './types'
 
 /** Where the site is served from: "/" locally, "/next82/" on GitHub Pages. */
 const BASE = import.meta.env.BASE_URL
@@ -108,4 +108,12 @@ export function soFarText(p: { playedSoFar: number | null; teamGamesSoFar: numbe
 
 export function playedText(games: number, seasonGames: number): string {
   return `${games} of ${seasonGames}${games > seasonGames ? ' (traded)' : ''}`
+}
+
+/** One-line description of a manual adjustment's status. */
+export function overrideStatus(o: Override): string {
+  if (o.indefinite) return 'Out indefinitely'
+  if (o.earliestReturn && o.latestReturn) return `Out · expected back ${shortDate(o.earliestReturn)}–${shortDate(o.latestReturn)}`
+  if (o.earliestReturn) return `Out · expected back ${shortDate(o.earliestReturn)} at the earliest`
+  return o.status
 }

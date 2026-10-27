@@ -1,9 +1,10 @@
 import { Link, useParams } from 'react-router'
 import FactorChart from '../components/FactorChart'
 import HistoryChart from '../components/HistoryChart'
+import OverrideNote from '../components/OverrideNote'
 import RangeBar from '../components/RangeBar'
 import TierPill from '../components/TierPill'
-import { playedText, shortDate, soFarText, usePlayer } from '../data'
+import { overrideStatus, playedText, shortDate, soFarText, usePlayer } from '../data'
 import type { Meta } from '../types'
 
 export default function Player({ meta }: { meta: Meta }) {
@@ -54,6 +55,8 @@ export default function Player({ meta }: { meta: Meta }) {
         )}
       </header>
 
+      {p.override && <OverrideNote override={p.override} />}
+
       <section className={`mt-8 grid gap-px overflow-hidden rounded-2xl border border-line bg-line sm:grid-cols-2 ${p.comeback ? 'lg:grid-cols-4' : 'lg:grid-cols-3'}`}>
         {p.comeback ? (
           <>
@@ -86,14 +89,31 @@ export default function Player({ meta }: { meta: Meta }) {
             {p.preLow !== null && p.preHigh !== null && <RangeBar low={p.preLow} point={p.forecast} high={p.preHigh} accent />}
           </BigStat>
         )}
-        {p.updated !== null ? (
+        {p.updated !== null && p.override?.indefinite ? (
+          <BigText label="Updated forecast · manual adjustment" text="Out indefinitely" note={`${p.playedSoFar ?? 0} played so far`}>
+            {p.updatedLow !== null && p.updatedHigh !== null && (
+              <RangeBar low={p.updatedLow} point={p.updated} high={p.updatedHigh} />
+            )}
+            <p className="mt-1 text-xs text-faint">From 0 more games up to the model's high end.</p>
+          </BigText>
+        ) : p.updated !== null ? (
           <BigStat
             value={Math.round(p.updated)}
             unit="games"
-            label={p.comeback ? 'Updated forecast, setback risk included' : 'Updated forecast'}
-            note={`${p.playedSoFar ?? 0} played + ${Math.round(p.updatedRest ?? 0)} more of ${p.gamesLeft} left${
-              meta.updatedAsOf ? ` · as of ${shortDate(meta.updatedAsOf)}` : ''
-            }`}
+            label={
+              p.override
+                ? 'Updated forecast · manual adjustment'
+                : p.comeback
+                  ? 'Updated forecast, setback risk included'
+                  : 'Updated forecast'
+            }
+            note={
+              p.override
+                ? `${overrideStatus(p.override)} · ${p.playedSoFar ?? 0} played + ${Math.round(p.updatedRest ?? 0)} more`
+                : `${p.playedSoFar ?? 0} played + ${Math.round(p.updatedRest ?? 0)} more of ${p.gamesLeft} left${
+                    meta.updatedAsOf ? ` · as of ${shortDate(meta.updatedAsOf)}` : ''
+                  }`
+            }
           >
             {p.updatedLow !== null && p.updatedHigh !== null && (
               <RangeBar low={p.updatedLow} point={p.updated} high={p.updatedHigh} />
@@ -212,12 +232,13 @@ function streakNote(streak: number | null): string | undefined {
   return `Out for the team's last ${streak} games`
 }
 
-function BigText({ label, text, note }: { label: string; text: string; note?: string }) {
+function BigText({ label, text, note, children }: { label: string; text: string; note?: string; children?: React.ReactNode }) {
   return (
     <div className="bg-surface px-6 py-6">
       <div className="text-sm text-muted">{label}</div>
       <div className="mt-2 font-display text-3xl leading-tight font-bold">{text}</div>
       {note && <div className="mt-2 text-sm text-faint">{note}</div>}
+      {children}
     </div>
   )
 }

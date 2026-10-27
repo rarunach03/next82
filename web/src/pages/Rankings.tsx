@@ -193,6 +193,18 @@ export default function Rankings({ meta, teams }: { meta: Meta; teams: Team[] })
                         <TierPill tier={r.p.tier} safeLow={meta.tierSafeLow} riskyLow={meta.setbackGames} />
                       </span>
                     )}
+                    {r.p.override && (
+                      <a
+                        href={r.p.override.sourceUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        title={`Manual adjustment: ${r.p.override.note}`}
+                        className="ml-2 inline-flex rounded-full border border-risky/50 px-2 py-0.5 align-middle text-xs font-semibold text-risky"
+                      >
+                        {r.p.override.indefinite ? 'Out indefinitely' : 'Out'}
+                      </a>
+                    )}
                     {r.p.rookie && (
                       <span
                         title={`Rookie (${r.p.draftRange}): this season's stats blended with past rookies from the same draft range`}
@@ -205,7 +217,10 @@ export default function Rankings({ meta, teams }: { meta: Meta; teams: Team[] })
                   <td className="tabular py-3 pr-3">{fmt(r.perGame, cat9 ? 2 : 1)}</td>
                   <td className="tabular hidden py-3 pr-3 text-muted md:table-cell">{r.perGameRank}</td>
                   <td className="tabular hidden py-3 pr-3 text-muted sm:table-cell">
-                    {Math.round(r.games)}
+                    <span title={r.p.override?.indefinite ? 'Out indefinitely: uses the middle of the likely range' : undefined}>
+                      {r.p.override?.indefinite && '~'}
+                      {Math.round(r.games)}
+                    </span>
                     {view === 'ros' && <span className="text-faint"> of {r.p.gamesLeft}</span>}
                   </td>
                   <td className="tabular py-3 pr-3 font-semibold">{fmt(r.value, 0)}</td>
@@ -230,7 +245,9 @@ export default function Rankings({ meta, teams }: { meta: Meta; teams: Team[] })
 
       <div className="mt-4 space-y-1 text-xs text-faint">
         <p>
-          Rank change: per-game rank minus value rank. ▲ means the player's availability lifts them above their per-game
+          "Out indefinitely" and "Out" mark manual adjustments from injury news (hover for the note, click for the
+          source); with no return date, games use the middle of the likely range. Rank change: per-game rank minus value
+          rank. ▲ means the player's availability lifts them above their per-game
           rank; ▼ means expected missed games pull them down. Durability discount: value lost compared with playing{' '}
           {view === 'ros' ? 'every remaining game' : 'all 82 games'}.
         </p>

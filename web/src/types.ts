@@ -37,6 +37,19 @@ export interface Meta {
 
 export type Tier = 'Safe' | 'Moderate' | 'Risky'
 
+/** A manual injury adjustment to the updated forecast (data/overrides.csv). */
+export interface Override {
+  status: string
+  note: string
+  sourceUrl: string
+  dateAdded: string | null
+  reviewBy: string | null
+  earliestReturn: string | null
+  latestReturn: string | null
+  /** No return window known: shown as "Out indefinitely". */
+  indefinite: boolean
+}
+
 export interface Team {
   abbr: string
   name: string
@@ -84,6 +97,7 @@ export interface PlayerSummary {
   rotationRole: boolean
   /** Not on any current roster. */
   notOnRoster: boolean
+  override: Override | null
 }
 
 export interface Factor {
@@ -134,6 +148,7 @@ export interface FantasyPlayer {
   /** In their first NBA season: ranked from this season's games plus a draft-range baseline. */
   rookie: boolean
   draftRange: string | null
+  override: Override | null
   playedSoFar: number | null
   /** Team games left, and the games the updated forecast expects the player to play. */
   gamesLeft: number

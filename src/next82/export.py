@@ -15,7 +15,7 @@ from datetime import datetime
 
 import pandas as pd
 
-from next82 import accuracy, config, data, evaluate, fantasy, in_season, rookies
+from next82 import accuracy, config, data, evaluate, fantasy, in_season, overrides, rookies
 from next82.intervals import tier
 from next82.explain import GAMES, similar_comebacks, top_factors
 from next82.preseason import load_forecasts, load_ranges
@@ -64,6 +64,23 @@ def player_history(history: pd.DataFrame, seasons: list[str], player_id: int) ->
     ]
 
 
+def override_json(r) -> dict | None:
+    """A manual injury adjustment for the site, or None."""
+    if not isinstance(r.override_status, str):
+        return None
+    day = lambda d: str(pd.Timestamp(d).date()) if d is not None and pd.notna(d) else None
+    return {
+        "status": r.override_status,
+        "note": r.override_note,
+        "sourceUrl": r.override_source,
+        "dateAdded": day(r.override_added),
+        "reviewBy": day(r.override_review_by),
+        "earliestReturn": day(r.override_earliest),
+        "latestReturn": day(r.override_latest),
+        "indefinite": bool(r.override_indefinite),
+    }
+
+
 def in_season_accuracy() -> dict:
     """Test-season accuracy of the rest-of-season model and its best baseline, if trained."""
     if not in_season.METRICS_PATH.exists():
@@ -110,9 +127,10 @@ def write_fantasy(forecasts: pd.DataFrame, target: str, rosters: pd.DataFrame | 
     veterans["team"] = veterans.TEAM_ABBREVIATION_NOW
     rookie_rows = rookies.current_rookies(rosters, forecasts.PLAYER_ID) if rosters is not None else pd.DataFrame()
     if not rookie_rows.empty:
-        rookie_rows = rookie_rows.assign(rookie=True, tier=None, team=rookie_rows.TEAM_ABBREVIATION)
+        rookie_rows = rookie_rows.assign(rookie=True, tier=None, team=rookie_rows.TEAM_ABBREVIATION,
+                                         **{c: None for c in overrides.OUTPUT})
     cols = ["PLAYER_NAME", "team", "tier", "rookie", "draft_range", "played_so_far", "team_games_left",
-            "predicted_rest", "updated_total", *fantasy.STATS]
+            "predicted_rest", "updated_total", *overrides.OUTPUT, *fantasy.STATS]
     rows = pd.concat([veterans[cols], rookie_rows[cols]] if not rookie_rows.empty else [veterans[cols]])
     rows = rows.join(fantasy.score(rows[fantasy.STATS])[["espn", "yahoo", *[f"z_{c}" for c in [*fantasy.CATEGORIES, "total"]]]])
 
@@ -128,6 +146,7 @@ def write_fantasy(forecasts: pd.DataFrame, target: str, rosters: pd.DataFrame | 
             "tier": r.tier if isinstance(r.tier, str) else None,
             "rookie": bool(r.rookie),
             "draftRange": r.draft_range,
+            "override": override_json(r),
             "playedSoFar": None if pd.isna(r.played_so_far) else int(r.played_so_far),
             "gamesLeft": int(r.team_games_left),
             "restGames": round(float(r.predicted_rest), 1),
@@ -237,6 +256,15 @@ def main():
     forecasts["not_on_roster"] = forecasts.TEAM_ABBREVIATION_NOW.isna()
     unsigned = forecasts.not_on_roster & (forecasts.played_so_far.fillna(0) == 0)
     forecasts.loc[unsigned, updated_cols] = None
+
+    # Manual injury adjustments (data/overrides.csv), applied before tiers and fantasy
+    # values so both use them. The accuracy page and test metrics never see them.
+    manual = overrides.load()
+    today = updated.as_of.iloc[0] + pd.Timedelta(days=1) if updated is not None else pd.Timestamp.today().normalize()
+    for o in overrides.overdue(manual, pd.Timestamp.today().normalize()).itertuples():
+        print(f"WARNING: override for {o.player_name} is past its review-by date ({o.review_by.date()}); update data/overrides.csv")
+    team_ids = rosters.set_index("PLAYER_ID").TEAM_ID if rosters is not None else pd.Series(dtype=float)
+    forecasts = overrides.apply(forecasts, manual, data.saved_schedule(), today, team_ids)
     # Availability tier: only for players in a rotation role (for bench players a low
     # range mostly reflects coaching decisions, not health), and only from the updated
     # forecast, whose Safe tier proved honest on test seasons (preseason ranges can't
@@ -287,6 +315,7 @@ def main():
             "tier": r.tier,
             "rotationRole": bool(r.rotation_role),
             "notOnRoster": bool(r.not_on_roster),
+            "override": override_json(r),
         }
         players.append(summary)
 
