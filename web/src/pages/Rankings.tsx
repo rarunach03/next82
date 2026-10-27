@@ -172,6 +172,9 @@ export default function Rankings({ meta, teams }: { meta: Meta; teams: Team[] })
               {header('value', view === 'ros' ? 'Rest-of-season value' : 'Season value')}
               {header('change', 'Rank change', 'hidden md:table-cell')}
               {header('discount', 'Durability discount', 'hidden lg:table-cell')}
+              <th className="hidden py-3 pr-4 font-medium uppercase xl:table-cell" title="Share of back-to-back second nights the player sits, and his team's back-to-backs left">
+                B2B rest
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -243,6 +246,15 @@ export default function Rankings({ meta, teams }: { meta: Meta; teams: Team[] })
                   <td className="tabular hidden py-3 pr-3 text-muted lg:table-cell">
                     {r.discount > 0 ? `−${fmt(r.discount, 0)}` : '–'}
                   </td>
+                  <td className="tabular hidden py-3 pr-4 text-muted xl:table-cell">
+                    {r.p.b2bRate !== null && r.p.b2bLeft !== null ? (
+                      <>
+                        {Math.round(r.p.b2bRate * 100)}%<span className="text-faint"> of {r.p.b2bLeft}</span>
+                      </>
+                    ) : (
+                      '–'
+                    )}
+                  </td>
                 </tr>
               )
             })}
@@ -259,7 +271,9 @@ export default function Rankings({ meta, teams }: { meta: Meta; teams: Team[] })
           {view === 'ros' ? 'every remaining game' : 'all 82 games'}.
         </p>
         <p>
-          ESPN and Yahoo use each site's default points scoring. 9-cat values are z-scores per game against the top{' '}
+          B2B rest: how often the player sits the second night of a back-to-back (from the last three seasons, pulled
+          toward the league average), and how many his team has left. The forecasts already reflect typical resting. ESPN
+          and Yahoo use each site's default points scoring. 9-cat values are z-scores per game against the top{' '}
           {fantasy.poolSize} players (12 teams × 13), with FG% and FT% weighted by attempts.
         </p>
         <p>

@@ -13,9 +13,10 @@ import shutil
 import unicodedata
 from datetime import datetime
 
+import numpy as np
 import pandas as pd
 
-from next82 import accuracy, config, data, evaluate, fantasy, in_season, overrides, rookies
+from next82 import accuracy, back_to_back, config, data, evaluate, fantasy, in_season, overrides, rookies
 from next82.intervals import tier
 from next82.explain import GAMES, similar_comebacks, top_factors
 from next82.preseason import load_forecasts, load_ranges
@@ -62,6 +63,20 @@ def player_history(history: pd.DataFrame, seasons: list[str], player_id: int) ->
          "seasonGames": int(season_length[s]), "missed": pd.isna(r.GP)}
         for s, r in h.iterrows()
     ]
+
+
+def back_to_back_info(forecasts: pd.DataFrame, team_ids: pd.Series, today: pd.Timestamp) -> pd.DataFrame:
+    """PLAYER_ID, b2b_left (team second nights from today) and b2b_rate (shrunk rest rate)."""
+    schedule = data.saved_schedule()
+    out = pd.DataFrame({"PLAYER_ID": forecasts.PLAYER_ID, "b2b_left": np.nan, "b2b_rate": np.nan})
+    if schedule is None or not back_to_back.RATES_PATH.exists():
+        return out
+    league = json.loads(back_to_back.METRICS_PATH.read_text())["league_rate"]
+    rates = pd.read_parquet(back_to_back.RATES_PATH).set_index("PLAYER_ID").rate
+    left = back_to_back.remaining_back_to_backs(schedule, today)
+    out["b2b_left"] = out.PLAYER_ID.map(team_ids).map(left)
+    out["b2b_rate"] = out.PLAYER_ID.map(rates).fillna(league)
+    return out
 
 
 def override_json(r) -> dict | None:
@@ -133,9 +148,11 @@ def write_fantasy(forecasts: pd.DataFrame, target: str, rosters: pd.DataFrame | 
     rookie_rows = rookies.current_rookies(rosters, forecasts.PLAYER_ID) if rosters is not None else pd.DataFrame()
     if not rookie_rows.empty:
         rookie_rows = rookie_rows.assign(rookie=True, tier=None, team=rookie_rows.TEAM_ABBREVIATION,
-                                         updated_low=None, updated_high=None, **{c: None for c in overrides.OUTPUT})
+                                         updated_low=None, updated_high=None, b2b_left=np.nan, b2b_rate=np.nan,
+                                         **{c: None for c in overrides.OUTPUT})
     cols = ["PLAYER_NAME", "team", "tier", "rookie", "draft_range", "played_so_far", "team_games_left",
-            "predicted_rest", "updated_total", "updated_low", "updated_high", *overrides.OUTPUT, *fantasy.STATS]
+            "predicted_rest", "updated_total", "updated_low", "updated_high", "b2b_left", "b2b_rate",
+            *overrides.OUTPUT, *fantasy.STATS]
     rows = pd.concat([veterans[cols], rookie_rows[cols]] if not rookie_rows.empty else [veterans[cols]])
     rows = rows.join(fantasy.score(rows[fantasy.STATS])[["espn", "yahoo", *[f"z_{c}" for c in [*fantasy.CATEGORIES, "total"]]]])
 
@@ -152,6 +169,8 @@ def write_fantasy(forecasts: pd.DataFrame, target: str, rosters: pd.DataFrame | 
             "rookie": bool(r.rookie),
             "draftRange": r.draft_range,
             "override": override_json(r),
+            "b2bLeft": None if pd.isna(r.b2b_left) else int(r.b2b_left),
+            "b2bRate": None if pd.isna(r.b2b_rate) else round(float(r.b2b_rate), 3),
             "playedSoFar": None if pd.isna(r.played_so_far) else int(r.played_so_far),
             "gamesLeft": int(r.team_games_left),
             "restGames": round(float(r.predicted_rest), 1),
@@ -273,6 +292,10 @@ def main():
         print(f"WARNING: override for {o.player_name} is past its review-by date ({o.review_by.date()}); update data/overrides.csv")
     team_ids = rosters.set_index("PLAYER_ID").TEAM_ID if rosters is not None else pd.Series(dtype=float)
     forecasts = overrides.apply(forecasts, manual, data.saved_schedule(), today, team_ids)
+
+    # Back-to-backs: each team's remaining second nights and each player's rest rate.
+    # Shown on the site; not added to the forecast (it didn't improve validation).
+    forecasts = forecasts.merge(back_to_back_info(forecasts, team_ids, today), on="PLAYER_ID", how="left")
     # Availability tier: only for players in a rotation role (for bench players a low
     # range mostly reflects coaching decisions, not health), and only from the updated
     # forecast, whose Safe tier proved honest on test seasons (preseason ranges can't
@@ -324,6 +347,9 @@ def main():
             "rotationRole": bool(r.rotation_role),
             "notOnRoster": bool(r.not_on_roster),
             "override": override_json(r),
+            # Back-to-back second nights the team has left, and how often he sits them.
+            "b2bLeft": None if pd.isna(r.b2b_left) else int(r.b2b_left),
+            "b2bRate": None if pd.isna(r.b2b_rate) else round(float(r.b2b_rate), 3),
         }
         players.append(summary)
 
@@ -375,6 +401,8 @@ def main():
             "games": GAMES,
             "setbackGames": config.SETBACK_GAMES,
             "tierSafeLow": config.TIER_SAFE_LOW,
+            "b2bLeagueRate": (round(json.loads(back_to_back.METRICS_PATH.read_text())["league_rate"], 3)
+                              if back_to_back.METRICS_PATH.exists() else None),
             "accuracy": {
                 "modelMae": round(model_mae, 1),
                 "modelMedianError": round(results[metrics["final_model"]]["median_error_all"], 1),

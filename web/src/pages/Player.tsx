@@ -138,6 +138,15 @@ export default function Player({ meta }: { meta: Meta }) {
         )}
       </section>
 
+      {p.b2bLeft !== null && p.b2bRate !== null && meta.b2bLeagueRate !== null && (
+        <p className="mt-4 text-sm text-muted">
+          <span className="text-ink">Back-to-backs:</span> {p.team ?? 'His team'} has {p.b2bLeft} left. He sits the second
+          night about {Math.round(p.b2bRate * 100)}% of the time (league average {Math.round(meta.b2bLeagueRate * 100)}%),
+          {' '}roughly {Math.max(0, Math.round(p.b2bRate * p.b2bLeft))} game{Math.round(p.b2bRate * p.b2bLeft) === 1 ? '' : 's'}.
+          {' '}<span className="text-faint">The updated forecast already reflects typical resting.</span>
+        </p>
+      )}
+
       {p.comeback ? (
         <p className="mt-4 rounded-xl border border-accent/30 bg-accent/10 px-4 py-3 text-sm text-ink">
           {p.name} didn't play in {meta.dataThrough}. Players returning from a missed season tend to either play a lot or

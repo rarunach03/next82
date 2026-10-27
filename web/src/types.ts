@@ -32,6 +32,8 @@ export interface Meta {
   setbackGames: number
   /** Tier cutoffs on the low end of the likely range: Safe at this many games or more. */
   tierSafeLow: number
+  /** League-wide rate of sitting the second night of a back-to-back. */
+  b2bLeagueRate: number | null
   accuracy: Accuracy
 }
 
@@ -103,6 +105,9 @@ export interface PlayerSummary {
   /** Not on any current roster. */
   notOnRoster: boolean
   override: Override | null
+  /** Back-to-back second nights the team has left, and the player's (shrunk) rest rate on them. */
+  b2bLeft: number | null
+  b2bRate: number | null
 }
 
 export interface Factor {
@@ -154,6 +159,8 @@ export interface FantasyPlayer {
   rookie: boolean
   draftRange: string | null
   override: Override | null
+  b2bLeft: number | null
+  b2bRate: number | null
   playedSoFar: number | null
   /** Team games left, and the games the updated forecast expects the player to play. */
   gamesLeft: number
