@@ -8,8 +8,9 @@ The injury start is the later of the player's last game played and his first
 appearance on this season's report with this injury, so an offseason injury isn't
 counted from April. The exception is a player already listed Out with an injury on the
 last day of the previous regular season (when every team plays, so everyone injured
-is listed; the wording then is often generic, like "knee surgery"): his injury
-predates the season, so it's counted from his last game.
+is listed; the wording then is often generic, like "knee surgery") or on his team's
+last playoff game day: his injury predates the season, so it's counted from his last
+game (playoffs included).
 
 A team-announced timeline in data/news_timelines.csv replaces the table's estimate
 (it's no longer an estimate). Manual rows in data/overrides.csv always win.
@@ -29,7 +30,8 @@ from next82.overrides import COLUMNS
 RECOVERY_PATH = config.ROOT / "data" / "recovery_table.csv"
 NEWS_PATH = config.ROOT / "data" / "news_timelines.csv"
 LAST_GAME_PATH = config.PROCESSED_DIR / f"last_game_before_{config.FORECAST_SEASON}.parquet"
-# Parsed facts of the injury report from the previous season's last regular-season day.
+# Parsed facts of the injury reports from the previous season's last regular-season day
+# and each playoff team's last playoff game day.
 END_OF_LAST_SEASON_PATH = config.PROCESSED_DIR / f"injuries_end_of_season_before_{config.FORECAST_SEASON}.parquet"
 # Still out after the latest typical return: assume he's back within this many days.
 OVERDUE_WINDOW_DAYS = 14
@@ -164,23 +166,44 @@ def current(manual: pd.DataFrame, today: pd.Timestamp) -> tuple[pd.DataFrame, li
                  player_games, today, end)
 
 
+def playoff_games(season: str) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """The season's playoff games: player rows (PLAYER_ID, GAME_DATE) and team rows (TEAM_ID, GAME_DATE)."""
+    import time
+
+    from nba_api.stats.endpoints import leaguegamelog, playergamelogs
+
+    players = playergamelogs.PlayerGameLogs(season_nullable=season, season_type_nullable="Playoffs",
+                                            timeout=data.TIMEOUT).get_data_frames()[0]
+    time.sleep(config.REQUEST_DELAY)
+    teams = leaguegamelog.LeagueGameLog(season=season, season_type_all_star="Playoffs",
+                                        player_or_team_abbreviation="T", timeout=data.TIMEOUT).get_data_frames()[0]
+    to_day = lambda s: pd.to_datetime(s.astype(str).str[:10])
+    return (pd.DataFrame({"PLAYER_ID": players.PLAYER_ID, "GAME_DATE": to_day(players.GAME_DATE)}),
+            pd.DataFrame({"TEAM_ID": teams.TEAM_ID, "GAME_DATE": to_day(teams.GAME_DATE)}))
+
+
 def main():
-    """Each player's last game before the season in progress, and the injury report from
-    the last regular-season day before it (both from history; built once per season)."""
+    """Built once per season from history: each player's last game before the season in
+    progress (playoffs included), and the injury reports from the last regular-season
+    day and each playoff team's last playoff game day."""
     from next82 import injury_history
 
-    games = data.load("player_games")[["PLAYER_ID", "GAME_DATE"]]
-    last = games.assign(GAME_DATE=pd.to_datetime(games.GAME_DATE.astype(str).str[:10])).groupby("PLAYER_ID").GAME_DATE.max()
-    last.reset_index().to_parquet(LAST_GAME_PATH, index=False)
-    print(f"Saved {LAST_GAME_PATH.relative_to(config.ROOT)} ({len(last):,} players)")
-
     previous = config.SEASONS[-1]
+    games = data.load("player_games")[["PLAYER_ID", "GAME_DATE"]]
+    games = games.assign(GAME_DATE=pd.to_datetime(games.GAME_DATE.astype(str).str[:10]))
+    playoff_players, playoff_teams = playoff_games(previous)
+    last = pd.concat([games, playoff_players]).groupby("PLAYER_ID").GAME_DATE.max()
+    last.reset_index().to_parquet(LAST_GAME_PATH, index=False)
+    print(f"Saved {LAST_GAME_PATH.relative_to(config.ROOT)} ({len(last):,} players; playoffs included)")
+
     team_games = data.load("team_games", [previous])
-    final_day = pd.to_datetime(team_games.GAME_DATE.astype(str).str[:10]).max()
-    report = injury_history.cached_day(final_day, previous)
+    days = {pd.to_datetime(team_games.GAME_DATE.astype(str).str[:10]).max()}
+    days |= set(playoff_teams.groupby("TEAM_ID").GAME_DATE.max())
+    reports = [injury_history.cached_day(day, previous) for day in sorted(days)]
+    report = pd.concat([r for r in reports if len(r)], ignore_index=True)
     report.to_parquet(END_OF_LAST_SEASON_PATH, index=False)
-    print(f"Saved {END_OF_LAST_SEASON_PATH.relative_to(config.ROOT)}: {final_day:%Y-%m-%d} report, "
-          f"{(report.status == 'Out').sum()} players out")
+    print(f"Saved {END_OF_LAST_SEASON_PATH.relative_to(config.ROOT)}: {len(days)} report days "
+          f"({sum(len(r) > 0 for r in reports)} found), {(report.status == 'Out').sum()} players out")
 
 
 if __name__ == "__main__":

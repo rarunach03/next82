@@ -126,3 +126,14 @@ def test_offseason_injury_counts_from_first_listing():
     end = pd.DataFrame({"PLAYER_ID": [1], "status": ["Out"], "injury_type": ["surgery"]})
     r = auto_overrides.build(log, RECOVERY, NO_NEWS, [], pd.Series({1: pd.Timestamp("2026-04-10")}), None, TODAY, end)[0].iloc[0]
     assert r.earliest_return == TODAY  # counted from April: overdue, back any day
+
+
+def test_out_on_last_playoff_report_counts_from_last_playoff_game():
+    log = _log([{"PLAYER_ID": 1, "team": "A", "status": "Out", "injury_type": "ACL", "body_part": "acl repair",
+                 "report_day": "2026-10-26"}])
+    # Reports from the last regular-season day and the team's last playoff game day.
+    end = pd.DataFrame({"PLAYER_ID": [2, 1], "status": ["Out", "Out"], "injury_type": ["sprain", "ACL"],
+                        "report_day": pd.to_datetime(["2026-04-12", "2026-05-10"])})
+    last_playoff_game = pd.Timestamp("2026-05-01")
+    r = auto_overrides.build(log, RECOVERY, NO_NEWS, [], pd.Series({1: last_playoff_game}), None, TODAY, end)[0].iloc[0]
+    assert r.earliest_return == last_playoff_game + pd.Timedelta(days=298)
