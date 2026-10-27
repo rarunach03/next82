@@ -203,6 +203,7 @@ export default function Rankings({ meta, teams }: { meta: Meta; teams: Team[] })
                         className="ml-2 inline-flex rounded-full border border-risky/50 px-2 py-0.5 align-middle text-xs font-semibold text-risky"
                       >
                         {r.p.override.indefinite ? 'Out indefinitely' : r.p.override.estimated ? 'Out (est.)' : 'Out'}
+                        {r.p.override.needsReview && ' · needs review'}
                       </a>
                     )}
                     {r.p.rookie && (

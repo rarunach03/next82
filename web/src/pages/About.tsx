@@ -101,6 +101,10 @@ export default function About({ meta }: { meta: Meta }) {
       </Section>
 
       <Section title="The data">
+        <p className="text-ink">
+          Data from NBA.com. Unofficial, non-commercial student project, not affiliated with the NBA or its teams. There
+          are no ads or paid features.
+        </p>
         <p>
           Thirty regular seasons of NBA stats, from 1996-97 through {meta.dataThrough}, plus this season's games, from
           stats.nba.com via the open-source nba_api library. There's no public injury data, so long absences are worked

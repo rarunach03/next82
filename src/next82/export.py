@@ -80,6 +80,9 @@ def override_json(r) -> dict | None:
         "earliestReturn": day(r.override_earliest),
         "latestReturn": day(r.override_latest),
         "indefinite": bool(r.override_indefinite),
+        # Past its review-by date: the site flags it so it can't be missed.
+        "needsReview": bool(r.override_review_by is not None and pd.notna(r.override_review_by)
+                            and pd.Timestamp(r.override_review_by) < pd.Timestamp.today().normalize()),
     }
 
 

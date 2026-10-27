@@ -9,6 +9,12 @@ export default function OverrideNote({ override: o }: { override: Override }) {
         <span className="rounded-full border border-risky/50 px-2 py-0.5 text-xs font-semibold text-risky">Manual adjustment</span>
         <span className="font-semibold text-ink">{overrideStatus(o)}</span>
       </div>
+      {o.needsReview && (
+        <p className="mt-2 rounded-md border border-moderate/50 bg-moderate/10 px-2 py-1 text-xs font-semibold text-moderate">
+          Needs review: this adjustment was due to be checked by {o.reviewBy ? shortDate(o.reviewBy) : 'now'} and may be out
+          of date.
+        </p>
+      )}
       <p className="mt-1.5 text-ink">{o.note}</p>
       <p className="mt-1 text-xs text-muted">
         <a href={o.sourceUrl} target="_blank" rel="noreferrer" className="text-accent underline-offset-2 hover:underline">

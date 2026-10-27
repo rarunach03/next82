@@ -78,7 +78,7 @@ export default function Leaderboard({
                 <td className="tabular hidden py-3 pr-4 sm:table-cell">
                   {p.override?.indefinite ? (
                     <span title={p.override.note} className="text-xs font-semibold text-risky">
-                      Out indefinitely
+                      Out indefinitely{p.override.needsReview && ' · needs review'}
                     </span>
                   ) : p.updated === null ? (
                     <span className="text-xs text-faint">{p.notOnRoster ? 'Not on a roster' : '—'}</span>

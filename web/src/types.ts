@@ -51,6 +51,8 @@ export interface Override {
   latestReturn: string | null
   /** No return window known: shown as "Out indefinitely". */
   indefinite: boolean
+  /** Past its review-by date. */
+  needsReview: boolean
 }
 
 export interface Team {

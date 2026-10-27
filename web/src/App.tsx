@@ -108,11 +108,13 @@ function Footer({ index }: { index: Index }) {
   return (
     <footer className="border-t border-line">
       <div className="mx-auto max-w-4xl space-y-1 px-4 py-6 text-xs text-faint sm:px-6">
+        <p className="text-sm font-medium text-muted">
+          Data from NBA.com. Unofficial, non-commercial student project, not affiliated with the NBA or its teams.
+        </p>
         <p>
           Forecasts use NBA regular seasons from 1996-97 through {meta.dataThrough}
           {rosters && <> · Teams as of {rosters}</>}
           {meta.seasonStarted && meta.soFarThrough && <> · {meta.forecastSeason} games through {shortDate(meta.soFarThrough)}</>}.
-          Data from stats.nba.com via nba_api.
         </p>
         <p>
           Forecasts were made before the {meta.forecastSeason} season and stay fixed, so they can be checked against what

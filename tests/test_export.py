@@ -98,3 +98,21 @@ def test_accuracy_file(out):
     assert a["gapRange"][0] <= a["gapRange"][1]
     dates = [t["date"] for t in a["trend"]]
     assert dates == sorted(dates) and dates[-1] == a["asOf"]
+
+
+def test_overrides_flag_when_past_review_date(tmp_path, monkeypatch):
+    import pandas as pd
+    from next82 import export as ex, overrides
+
+    if not overrides.PATH.exists():
+        pytest.skip("no overrides file")
+    o = overrides.load()
+    o["review_by"] = pd.Timestamp("2000-01-01")  # long past
+    path = tmp_path / "ov.csv"
+    o.assign(**{c: o[c].dt.strftime("%Y-%m-%d") for c in overrides.DATE_COLUMNS}).to_csv(path, index=False)
+    monkeypatch.setattr(overrides, "PATH", path)
+    monkeypatch.setattr(ex, "OUT_DIR", tmp_path / "out")
+    ex.main()
+    players = json.loads((tmp_path / "out" / "index.json").read_text())["players"]
+    flagged = [p for p in players if p["override"]]
+    assert flagged and all(p["override"]["needsReview"] for p in flagged)
