@@ -16,7 +16,8 @@ from datetime import datetime
 import numpy as np
 import pandas as pd
 
-from next82 import accuracy, auto_overrides, back_to_back, config, data, evaluate, fantasy, in_season, overrides, rookies
+from next82 import (accuracy, auto_overrides, back_to_back, config, data, evaluate, fantasy, in_season, injuries,
+                    overrides, rookies)
 from next82.intervals import tier
 from next82.explain import GAMES, similar_comebacks, top_factors
 from next82.preseason import load_forecasts, load_ranges
@@ -63,6 +64,44 @@ def player_history(history: pd.DataFrame, seasons: list[str], player_id: int) ->
          "seasonGames": int(season_length[s]), "missed": pd.isna(r.GP)}
         for s, r in h.iterrows()
     ]
+
+
+OUT_COLUMNS = ["out_reason", "out_status", "out_injury", "out_report_url", "out_games_after_return"]
+
+
+def out_info(forecasts: pd.DataFrame, team_ids: pd.Series, today: pd.Timestamp) -> pd.DataFrame:
+    """Who's out right now and why, for the stash list:
+        out_reason  'injury report' (listed Out on his team's latest report),
+                    'long absence, no report' (5+ straight team games missed, not listed),
+                    or the override kind ('manual', 'automatic', 'news')
+    plus the report's status and reason, and team games left after an expected return."""
+    out = pd.DataFrame({"PLAYER_ID": forecasts.PLAYER_ID})
+    for c in OUT_COLUMNS:
+        out[c] = None
+    log = injuries.saved_log()
+    listing = auto_overrides.current_listings(log).set_index("PLAYER_ID") if log is not None and len(log) else None
+    schedule = data.saved_schedule()
+    for i, r in forecasts.iterrows():
+        pid = r.PLAYER_ID
+        listed = listing is not None and pid in listing.index and listing.loc[pid, "status"] == "Out"
+        long_absence = r.has_played == 1 and pd.notna(r.absence_streak) and r.absence_streak >= in_season.OUT_STREAK_GAMES
+        if isinstance(r.override_kind, str):
+            reason = r.override_kind
+        elif listed:
+            reason = "injury report"
+        elif long_absence:
+            reason = "long absence, no report"
+        else:
+            continue
+        games_after = None
+        if pd.notna(r.override_earliest) and schedule is not None and pd.notna(r.team_games_left):
+            games_after = overrides.games_from(team_ids.get(pid), pd.Timestamp(r.override_earliest), today, schedule,
+                                               r.team_games_left)
+        row = listing.loc[pid] if listed else None
+        out.loc[i, OUT_COLUMNS] = [reason, row.status if row is not None else None,
+                                   injuries.clean_reason(row.reason) if row is not None else None,
+                                   row.report_url if row is not None else None, games_after]
+    return out
 
 
 def back_to_back_info(forecasts: pd.DataFrame, team_ids: pd.Series, today: pd.Timestamp) -> pd.DataFrame:
@@ -151,10 +190,11 @@ def write_fantasy(forecasts: pd.DataFrame, target: str, rosters: pd.DataFrame | 
     if not rookie_rows.empty:
         rookie_rows = rookie_rows.assign(rookie=True, tier=None, team=rookie_rows.TEAM_ABBREVIATION,
                                          updated_low=None, updated_high=None, b2b_left=np.nan, b2b_rate=np.nan,
+                                         **{c: None for c in OUT_COLUMNS},
                                          **{c: None for c in overrides.OUTPUT})
     cols = ["PLAYER_NAME", "team", "tier", "rookie", "draft_range", "played_so_far", "team_games_left",
             "predicted_rest", "updated_total", "updated_low", "updated_high", "b2b_left", "b2b_rate",
-            *overrides.OUTPUT, *fantasy.STATS]
+            *OUT_COLUMNS, *overrides.OUTPUT, *fantasy.STATS]
     rows = pd.concat([veterans[cols], rookie_rows[cols]] if not rookie_rows.empty else [veterans[cols]])
     rows = rows.join(fantasy.score(rows[fantasy.STATS])[["espn", "yahoo", *[f"z_{c}" for c in [*fantasy.CATEGORIES, "total"]]]])
 
@@ -173,6 +213,12 @@ def write_fantasy(forecasts: pd.DataFrame, target: str, rosters: pd.DataFrame | 
             "override": override_json(r),
             "b2bLeft": None if pd.isna(r.b2b_left) else int(r.b2b_left),
             "b2bRate": None if pd.isna(r.b2b_rate) else round(float(r.b2b_rate), 3),
+            # Currently out (for the stash list): why, the report's status and reason, games after return.
+            "out": None if not isinstance(r.out_reason, str) else {
+                "reason": r.out_reason, "status": r.out_status, "injury": r.out_injury, "reportUrl": r.out_report_url,
+                "gamesAfterReturn": None if r.out_games_after_return is None or pd.isna(r.out_games_after_return)
+                else round(float(r.out_games_after_return), 1),
+            },
             "playedSoFar": None if pd.isna(r.played_so_far) else int(r.played_so_far),
             "gamesLeft": int(r.team_games_left),
             "restGames": round(float(r.predicted_rest), 1),
@@ -303,6 +349,7 @@ def main():
     # Back-to-backs: each team's remaining second nights and each player's rest rate.
     # Shown on the site; not added to the forecast (it didn't improve validation).
     forecasts = forecasts.merge(back_to_back_info(forecasts, team_ids, today), on="PLAYER_ID", how="left")
+    forecasts = forecasts.merge(out_info(forecasts, team_ids, today), on="PLAYER_ID", how="left")
     # Availability tier: only for players in a rotation role (for bench players a low
     # range mostly reflects coaching decisions, not health), and only from the updated
     # forecast, whose Safe tier proved honest on test seasons (preseason ranges can't

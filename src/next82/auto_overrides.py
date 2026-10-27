@@ -104,14 +104,14 @@ def build(log: pd.DataFrame | None, recovery: pd.DataFrame, news: pd.DataFrame, 
             start = first_listed
         if news_row is not None:
             earliest, latest, estimated = news_row.earliest_return, news_row.latest_return, False
-            note = f"{r.reason}. Team timeline: {news_row.note}"
+            note = f"{injuries.clean_reason(r.reason)}. Team timeline: {news_row.note}"
             source, source2, kind = r.report_url, news_row.source_url, "news"
         else:
             earliest = start + pd.Timedelta(days=int(table.earliest_days))
             latest = (start + pd.Timedelta(days=int(table.latest_days))
                       if not table.can_be_season_ending and pd.notna(table.latest_days) else pd.NaT)
             estimated = True
-            note = (f"{r.reason} (NBA injury report, {r.report_day:%b %-d}). {table.basis} "
+            note = (f"{injuries.clean_reason(r.reason)} (NBA injury report, {r.report_day:%b %-d}). {table.basis} "
                     f"Counted from the last game played, {start:%b %-d, %Y}.")
             # Still out past the typical recovery: he could be back any time.
             if earliest < today:

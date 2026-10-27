@@ -159,9 +159,16 @@ def _join_reason(lines: list[str]) -> str:
     its own line ('Right Achilles Tendon' / 'Repair/Surgery') where older ones used ';'."""
     if not lines:
         return ""
-    if len(lines) > 1 and ";" not in lines[0] and lines[0].lower().startswith("injury"):
+    if len(lines) > 1 and ";" not in lines[0] and lines[0].lower().startswith("injury") and not lines[0].rstrip().endswith("/"):
         return f"{lines[0]}; {' '.join(lines[1:])}"
     return " ".join(lines)
+
+
+def clean_reason(reason) -> str | None:
+    """A reason for display: tidies the joins of wrapped lines (e.g. 'Repair /; Surgery')."""
+    if not isinstance(reason, str):
+        return None
+    return re.sub(r"\s*/\s*;\s*", " / ", re.sub(r"\s+", " ", reason)).strip()
 
 
 def classify(reason: str) -> dict:
@@ -218,7 +225,9 @@ def match_players(report: pd.DataFrame, rosters: pd.DataFrame) -> pd.Series:
 def parsed_report(pdf: bytes, url: str, when: datetime, rosters: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
     """Parsed, classified and matched report, plus log lines for anything left unparsed."""
     report = parse_report(pdf)
-    facts = pd.concat([report, pd.DataFrame([classify(r) for r in report.reason], index=report.index)], axis=1)
+    classified = pd.DataFrame([classify(r) for r in report.reason], index=report.index,
+                              columns=["category", "side", "body_part", "injury_type"])
+    facts = pd.concat([report, classified], axis=1)
     facts["PLAYER_ID"] = match_players(report, rosters)
     facts["report_time"] = pd.Timestamp(when).tz_localize(None) if pd.Timestamp(when).tzinfo else pd.Timestamp(when)
     facts["report_url"] = url

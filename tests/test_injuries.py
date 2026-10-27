@@ -64,3 +64,9 @@ def test_fetch_latest_steps_back_politely(monkeypatch):
     monkeypatch.setattr(injuries.time, "sleep", lambda s: None)
     url, when, pdf = injuries.fetch_latest(datetime(2026, 10, 26, 17, 7, tzinfo=injuries.EASTERN))
     assert url.endswith("04_30PM.pdf") and len(tried) == 3  # 5:00, 4:45, 4:30
+
+
+def test_reason_joins_and_cleanup():
+    assert injuries._join_reason(["Injury/Illness - Right ACL Repair /", "Surgery"]) == "Injury/Illness - Right ACL Repair / Surgery"
+    assert injuries.clean_reason("Injury/Illness - Right ACL Repair /; Surgery") == "Injury/Illness - Right ACL Repair / Surgery"
+    assert injuries.clean_reason(None) is None

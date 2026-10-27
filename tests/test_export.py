@@ -120,3 +120,14 @@ def test_overrides_flag_when_past_review_date(tmp_path, monkeypatch):
     assert manual and all(p["override"]["needsReview"] for p in manual)
     # Automatic overrides have no review date: they clear on their own.
     assert not any(p["override"]["needsReview"] for p in players if p["override"] and p["override"]["kind"] != "manual")
+
+
+def test_stash_info(out):
+    fantasy = json.loads((out / "fantasy.json").read_text())
+    reasons = {"injury report", "long absence, no report", "manual", "automatic", "news"}
+    flagged = [p for p in fantasy["players"] if p.get("out")]
+    assert all(p["out"]["reason"] in reasons for p in flagged)
+    # Override players are always marked out, with their kind as the reason.
+    for p in fantasy["players"]:
+        if p["override"]:
+            assert p["out"] and p["out"]["reason"] == p["override"]["kind"]

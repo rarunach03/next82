@@ -172,6 +172,14 @@ export interface FantasyPlayer {
   restHigh: number | null
   /** Updated forecast for the whole season (played so far + rest). */
   seasonGames: number
+  /** Currently out, and why (for the stash list). */
+  out: {
+    reason: 'injury report' | 'long absence, no report' | 'manual' | 'automatic' | 'news'
+    status: string | null
+    injury: string | null
+    reportUrl: string | null
+    gamesAfterReturn: number | null
+  } | null
   /** Per-game value: ESPN and Yahoo points, and total 9-category z-score. */
   perGame: Record<FantasyFormat, number>
   cats: Record<string, number>

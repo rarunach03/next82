@@ -6,6 +6,7 @@ import About from './pages/About'
 import Accuracy from './pages/Accuracy'
 import Home from './pages/Home'
 import Rankings from './pages/Rankings'
+import Stash from './pages/Stash'
 import Trade from './pages/Trade'
 
 // The player page carries the chart library, so it loads only when first opened.
@@ -30,11 +31,11 @@ function Shell() {
   return (
     <div className="flex min-h-dvh flex-col">
       <header className="sticky top-0 z-30 border-b border-line bg-bg/85 backdrop-blur">
-        <div className="mx-auto flex max-w-4xl items-center gap-4 px-4 py-3 sm:px-6">
+        <div className="mx-auto flex max-w-4xl items-center gap-3 px-4 py-3 sm:gap-4 sm:px-6">
           <Link to="/" className="font-display text-2xl font-extrabold tracking-tight uppercase">
             Next<span className="text-accent">82</span>
           </Link>
-          <nav className="ml-auto flex items-center gap-4">
+          <nav className="ml-auto flex items-center gap-2.5 sm:gap-4">
             {index && pathname !== '/' && (
               <div className="hidden w-64 sm:block">
                 <SearchBox players={index.players} size="compact" />
@@ -42,25 +43,31 @@ function Shell() {
             )}
             <Link
               to="/rankings"
-              className={`text-sm font-medium transition hover:text-ink ${pathname === '/rankings' ? 'text-ink' : 'text-muted'}`}
+              className={`text-xs font-medium transition hover:text-ink sm:text-sm ${pathname === '/rankings' ? 'text-ink' : 'text-muted'}`}
             >
               Rankings
             </Link>
             <Link
               to="/trade"
-              className={`text-sm font-medium transition hover:text-ink ${pathname === '/trade' ? 'text-ink' : 'text-muted'}`}
+              className={`text-xs font-medium transition hover:text-ink sm:text-sm ${pathname === '/trade' ? 'text-ink' : 'text-muted'}`}
             >
               Trade
             </Link>
             <Link
+              to="/stash"
+              className={`text-xs font-medium transition hover:text-ink sm:text-sm ${pathname === '/stash' ? 'text-ink' : 'text-muted'}`}
+            >
+              Stash
+            </Link>
+            <Link
               to="/accuracy"
-              className={`text-sm font-medium transition hover:text-ink ${pathname === '/accuracy' ? 'text-ink' : 'text-muted'}`}
+              className={`text-xs font-medium transition hover:text-ink sm:text-sm ${pathname === '/accuracy' ? 'text-ink' : 'text-muted'}`}
             >
               Accuracy
             </Link>
             <Link
               to="/about"
-              className={`text-sm font-medium transition hover:text-ink ${pathname === '/about' ? 'text-ink' : 'text-muted'}`}
+              className={`text-xs font-medium transition hover:text-ink sm:text-sm ${pathname === '/about' ? 'text-ink' : 'text-muted'}`}
             >
               About
             </Link>
@@ -86,6 +93,7 @@ function Shell() {
               />
               <Route path="/rankings" element={<Rankings meta={index.meta} teams={index.teams} />} />
               <Route path="/trade" element={<Trade />} />
+              <Route path="/stash" element={<Stash />} />
               <Route path="/accuracy" element={<Accuracy meta={index.meta} />} />
               <Route path="/about" element={<About meta={index.meta} />} />
               <Route path="*" element={<p className="py-16 text-muted">Page not found.</p>} />
