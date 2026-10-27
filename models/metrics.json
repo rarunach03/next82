@@ -81,6 +81,29 @@
       "n": 921,
       "coverage": 0.8154180238870793,
       "avg_width": 52.29262146489227
+    },
+    "tiers": {
+      "all players": {
+        "n": 952,
+        "safe_share": 0.07457983193277311,
+        "risky_share": 0.5042016806722689,
+        "safe_under_cutoff": 0.15492957746478872,
+        "risky_under_cutoff": 0.3020833333333333
+      },
+      "rotation role": {
+        "n": 611,
+        "safe_share": 0.11620294599018004,
+        "risky_share": 0.24713584288052373,
+        "safe_under_cutoff": 0.15492957746478872,
+        "risky_under_cutoff": 0.19205298013245034
+      },
+      "no rotation role": {
+        "n": 341,
+        "safe_share": 0.0,
+        "risky_share": 0.9648093841642229,
+        "safe_under_cutoff": null,
+        "risky_under_cutoff": 0.3525835866261398
+      }
     }
   }
 }

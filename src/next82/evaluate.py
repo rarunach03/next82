@@ -18,6 +18,13 @@ def is_rotation(df: pd.DataFrame) -> pd.Series:
     return (df.mpg >= config.ROTATION_MIN_MPG) & (df.gp_share >= config.ROTATION_MIN_GP_SHARE)
 
 
+def has_rotation_role(df: pd.DataFrame) -> pd.Series:
+    """A rotation role in the last season played (works for comeback players too):
+    15+ minutes per game and at least a quarter of the team's games."""
+    mpg = df.mpg.fillna(df.mpg_lag1)
+    return (mpg >= config.ROTATION_MIN_MPG) & (df.last_played_gp_share >= config.ROTATION_MIN_GP_SHARE)
+
+
 def errors_games(df: pd.DataFrame, pred_share: np.ndarray) -> np.ndarray:
     """Absolute error in games for each row, scaled to each target season's length."""
     return (np.abs(pred_share - df[TARGET]) * df.season_games_next).to_numpy()

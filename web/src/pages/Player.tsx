@@ -37,11 +37,20 @@ export default function Player({ meta }: { meta: Meta }) {
           {p.team && p.team !== p.lastTeam && <span className="text-faint"> · played for {p.lastTeam} in {meta.dataThrough}</span>}
           {!p.team && <span className="text-faint"> · last team {p.lastTeam}</span>}
         </p>
-        {p.tier && (
-          <p className="mt-3 flex items-center gap-2 text-sm text-muted">
+        {p.tier ? (
+          <p className="mt-3 flex flex-wrap items-center gap-2 text-sm text-muted">
+            <span className="text-faint">Availability tier</span>
             <TierPill tier={p.tier} safeLow={meta.tierSafeLow} riskyLow={meta.setbackGames} />
             {tierText(p.tier, meta.tierSafeLow, meta.setbackGames)}
           </p>
+        ) : (
+          p.updated !== null &&
+          !p.rotationRole && (
+            <p className="mt-3 text-sm text-faint">
+              No availability tier: not in a regular rotation role, so playing time depends more on the coach than on
+              health.
+            </p>
+          )
         )}
       </header>
 

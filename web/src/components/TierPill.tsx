@@ -10,7 +10,7 @@ const STYLES: Record<Tier, string> = {
 export default function TierPill({ tier, safeLow, riskyLow }: { tier: Tier; safeLow?: number; riskyLow?: number }) {
   const help =
     safeLow && riskyLow
-      ? `Based on the low end of the likely range: Safe if it's ${safeLow}+ games, Risky if it's under ${riskyLow}.`
+      ? `Availability tier, from the low end of the updated forecast's likely range: Safe if it's ${safeLow}+ games, Risky if it's under ${riskyLow}. Rotation players only.`
       : undefined
   return (
     <span title={help} className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold ${STYLES[tier]}`}>

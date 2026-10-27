@@ -22,7 +22,7 @@ import lightgbm as lgb
 import numpy as np
 import pandas as pd
 
-from next82 import config, data, intervals, models
+from next82 import config, data, evaluate, intervals, models
 from next82.features import FEATURES, load_table
 
 MODEL_PATH = config.MODELS_DIR / "in_season.txt"
@@ -389,6 +389,16 @@ def main():
     print(f"\nRange corrections per third (share of games left): {', '.join(f'{a:+.3f}' for a in adjustments)}; "
           f"low above high before tidying: {int((raw_low > raw_high).sum())} of {len(test)}")
     intervals.print_calibration(f"Rest-of-season ranges, test seasons {' and '.join(TEST_SEASONS)}", calibration)
+    # Tiers as the site shows them: on the low end of the season total (played + rest).
+    season_games = (test.team_games_so_far + test.team_games_left).to_numpy()
+    rotation = evaluate.has_rotation_role(test).to_numpy()
+    third = season_third(test.season_progress)
+    tier_table = intervals.tier_check(test.played_so_far + low, test.played_so_far + test.games_after, season_games, {
+        "all": np.ones(len(test), bool), "rotation role": rotation,
+        **{f"rotation role, {name}": rotation & (third == t) for t, name in enumerate(THIRDS)},
+        "no rotation role": ~rotation,
+    })
+    intervals.print_tier_check("In-season tiers, test seasons", tier_table)
 
     final = fit(snaps, **params)
     config.MODELS_DIR.mkdir(exist_ok=True)
@@ -398,7 +408,7 @@ def main():
     METRICS_PATH.write_text(json.dumps({
         "snapshot_days": SNAPSHOT_DAYS, "validation_season": VALIDATION_SEASON, "test_seasons": TEST_SEASONS,
         "blend_k": k, "params": params, "test": card,
-        "range_adjustments": adjustments, "range_calibration": calibration,
+        "range_adjustments": adjustments, "range_calibration": calibration, "tiers": tier_table,
     }, indent=2))
     print(f"\nSaved {MODEL_PATH.relative_to(config.ROOT)} (trained on all {snaps.SEASON.nunique()} seasons)")
 

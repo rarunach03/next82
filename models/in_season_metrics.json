@@ -84,5 +84,49 @@
       "coverage": 0.8173823072943611,
       "avg_width": 39.472056607439434
     }
+  },
+  "tiers": {
+    "all": {
+      "n": 12376,
+      "safe_share": 0.41047188106011634,
+      "risky_share": 0.2978345184227537,
+      "safe_under_cutoff": 0.025,
+      "risky_under_cutoff": 0.5515463917525774
+    },
+    "rotation role": {
+      "n": 7943,
+      "safe_share": 0.5477779176633514,
+      "risky_share": 0.1558605061060053,
+      "safe_under_cutoff": 0.02574120891749023,
+      "risky_under_cutoff": 0.4305331179321486
+    },
+    "rotation role, first third": {
+      "n": 3044,
+      "safe_share": 0.3899474375821288,
+      "risky_share": 0.22174770039421812,
+      "safe_under_cutoff": 0.06318449873631002,
+      "risky_under_cutoff": 0.26814814814814814
+    },
+    "rotation role, middle third": {
+      "n": 2397,
+      "safe_share": 0.5878181059657905,
+      "risky_share": 0.1347517730496454,
+      "safe_under_cutoff": 0.0241305890702626,
+      "risky_under_cutoff": 0.5356037151702786
+    },
+    "rotation role, last third": {
+      "n": 2502,
+      "safe_share": 0.7014388489208633,
+      "risky_share": 0.09592326139088729,
+      "safe_under_cutoff": 0.0017094017094017094,
+      "risky_under_cutoff": 0.7458333333333333
+    },
+    "no rotation role": {
+      "n": 4433,
+      "safe_share": 0.16444845477103542,
+      "risky_share": 0.5522219715768103,
+      "safe_under_cutoff": 0.0205761316872428,
+      "risky_under_cutoff": 0.6127450980392157
+    }
   }
 }

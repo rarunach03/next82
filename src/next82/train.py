@@ -122,9 +122,17 @@ def preseason_ranges(df: pd.DataFrame) -> tuple[float, dict]:
         "comeback players": (test.missed_season == 1).to_numpy(),
         "everyone else": (test.missed_season == 0).to_numpy(),
     })
+    metrics_tiers = intervals.tier_check(low * games, actual, games, {
+        "all players": np.ones(len(test), bool),
+        "rotation role": evaluate.has_rotation_role(test).to_numpy(),
+        "no rotation role": ~evaluate.has_rotation_role(test).to_numpy(),
+    })
+    table["tiers"] = metrics_tiers
     print(f"\nPreseason ranges: conformal correction {adjustment * 82:+.1f} games per side "
           f"(measured on {config.SEASONS[val_idx]}); low above high before tidying: {crossed} of {len(test)}")
-    intervals.print_calibration(f"Test seasons {test.SEASON.min()} and {test.SEASON.max()}", table)
+    intervals.print_calibration(f"Test seasons {test.SEASON.min()} and {test.SEASON.max()}",
+                                {k: v for k, v in table.items() if k != "tiers"})
+    intervals.print_tier_check("Preseason tiers, test seasons", metrics_tiers)
     return adjustment, table
 
 

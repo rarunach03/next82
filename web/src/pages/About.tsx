@@ -72,6 +72,10 @@ export default function About({ meta }: { meta: Meta }) {
           average. Forecasts for {meta.forecastSeason} were made before the season started and stay fixed, so they can be
           checked against what actually happens.
         </p>
+        <p>
+          Likely ranges for the preseason forecasts were added on October 26, 2026, a week into the season. They were
+          computed from preseason data only, so they use nothing the season has shown since.
+        </p>
       </Section>
 
       <Section title="What it can't do">

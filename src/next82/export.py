@@ -15,7 +15,8 @@ from datetime import datetime
 
 import pandas as pd
 
-from next82 import config, data, in_season
+from next82 import config, data, evaluate, in_season
+from next82.intervals import tier
 from next82.explain import GAMES, similar_comebacks, top_factors
 from next82.preseason import load_forecasts, load_ranges
 from next82.train import HISTORY_PATH, METRICS_PATH, PAST_COMEBACKS_PATH
@@ -77,13 +78,23 @@ def in_season_accuracy() -> dict:
     }
 
 
-def tier(low_games) -> str | None:
-    """Safe / Moderate / Risky from the low end of the likely range (see config)."""
-    if pd.isna(low_games):
-        return None
-    if low_games >= config.TIER_SAFE_LOW:
-        return "Safe"
-    return "Risky" if low_games < config.SETBACK_GAMES else "Moderate"
+def current_rotation_role(player_ids: pd.Series) -> pd.Series:
+    """A rotation role this season: 15+ minutes per game across at least a quarter
+    of the team's games, once the team has played 5+ games."""
+    logs = data.saved_season_logs()
+    if logs is None or logs[0].empty:
+        return pd.Series(False, index=player_ids.index)
+    player_games, team_games = logs
+    team_count = team_games.groupby("TEAM_ID").size()
+    last_team = player_games.sort_values("GAME_DATE").groupby("PLAYER_ID").TEAM_ID.last()
+    totals = player_games.groupby("PLAYER_ID").agg(games=("GAME_ID", "size"), minutes=("MIN", "sum"))
+    team_games_played = last_team.map(team_count)
+    role = (
+        (totals.minutes / totals.games >= config.ROTATION_MIN_MPG)
+        & (totals.games / team_games_played >= config.ROTATION_MIN_GP_SHARE)
+        & (team_games_played >= 5)
+    )
+    return player_ids.map(role).fillna(False).astype(bool)
 
 
 def round_or_none(value, digits=1):
@@ -154,9 +165,14 @@ def main():
     forecasts["not_on_roster"] = forecasts.TEAM_ABBREVIATION_NOW.isna()
     unsigned = forecasts.not_on_roster & (forecasts.played_so_far.fillna(0) == 0)
     forecasts.loc[unsigned, updated_cols] = None
-    # The tier follows the latest forecast: updated if there is one, else preseason.
-    forecasts["tier"] = [tier(lo) for lo in forecasts.updated_low.where(forecasts.updated_low.notna(), forecasts.low_games)]
-    forecasts.loc[unsigned, "tier"] = None
+    # Availability tier: only for players in a rotation role (for bench players a low
+    # range mostly reflects coaching decisions, not health), and only from the updated
+    # forecast, whose Safe tier proved honest on test seasons (preseason ranges can't
+    # reliably pick out players almost sure to play 45+ games).
+    forecasts["rotation_role"] = evaluate.has_rotation_role(forecasts) | current_rotation_role(forecasts.PLAYER_ID)
+    forecasts["tier"] = [
+        tier(lo) if role else None for lo, role in zip(forecasts.updated_low, forecasts.rotation_role)
+    ]
 
     comeback = forecasts.missed_season == 1
     forecasts["shown"] = forecasts.games_if_healthy.where(comeback, forecasts.pred_games)
@@ -197,6 +213,7 @@ def main():
             "updatedLow": round_or_none(r.updated_low, 0),
             "updatedHigh": round_or_none(r.updated_high, 0),
             "tier": r.tier,
+            "rotationRole": bool(r.rotation_role),
             "notOnRoster": bool(r.not_on_roster),
         }
         players.append(summary)

@@ -78,8 +78,10 @@ export interface PlayerSummary {
   preHigh: number | null
   updatedLow: number | null
   updatedHigh: number | null
-  /** From the low end of the latest likely range; null if not on a roster and no games. */
+  /** Availability tier from the low end of the updated forecast's range. Only for
+   * players in a rotation role; null otherwise. */
   tier: Tier | null
+  rotationRole: boolean
   /** Not on any current roster. */
   notOnRoster: boolean
 }

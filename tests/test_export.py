@@ -64,3 +64,10 @@ def test_unsigned_players_without_games_have_no_updated_forecast(out):
     unsigned = [p for p in index["players"] if p["notOnRoster"] and not p["playedSoFar"]]
     assert unsigned
     assert all(p["updated"] is None and p["tier"] is None for p in unsigned)
+
+
+def test_tiers_only_for_rotation_players_with_an_updated_forecast(out):
+    index = json.loads((out / "index.json").read_text())
+    tiered = [p for p in index["players"] if p["tier"] is not None]
+    assert tiered
+    assert all(p["rotationRole"] and p["updated"] is not None for p in tiered)

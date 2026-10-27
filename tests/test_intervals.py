@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 from next82 import intervals
-from next82.export import tier
+from next82.intervals import tier
 
 
 def test_tidy_never_leaves_low_above_high():
