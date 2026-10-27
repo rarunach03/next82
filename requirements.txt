@@ -3,6 +3,8 @@ nba_api>=1.11
 pandas>=3.0
 numpy>=2.5
 pyarrow>=26.0
+pdfplumber          # parsing the NBA's injury report
+requests
 
 # Modeling
 scikit-learn>=1.9

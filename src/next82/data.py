@@ -338,6 +338,10 @@ def refresh_current(season: str = config.FORECAST_SEASON):
     schedule = fetch_schedule(season)
     print(f"Schedule: {schedule.GAME_ID.nunique()} games with both teams set")
     time.sleep(config.REQUEST_DELAY)
+    from next82 import injuries  # the NBA's official injury report (parsed facts only)
+
+    injuries.refresh(rosters, season)
+    time.sleep(config.REQUEST_DELAY)
     players, teams_so_far = fetch_season_to_date(season)
     if teams_so_far.empty:
         print(f"{season} hasn't started yet")
