@@ -95,3 +95,12 @@ def test_recovery_table_file_is_complete():
     assert set(table.injury_type) >= {"ACL", "Achilles", "labrum", "meniscus", "fracture"}
     assert table.source_url.str.startswith("https://").all()
     assert (table.earliest_days < table.average_days).all()
+
+
+def test_latest_return_is_a_slow_recovery_not_the_average():
+    # Half of players return later than the average, so a latest return must be past it.
+    table = auto_overrides.load_recovery()
+    with_latest = table[table.latest_days.notna()]
+    assert (with_latest.latest_days > with_latest.average_days).all()
+    # No latest return means it can be season-ending (or of unknown length).
+    assert table[table.latest_days.isna()].can_be_season_ending.all()
