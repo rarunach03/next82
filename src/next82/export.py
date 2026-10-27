@@ -133,9 +133,9 @@ def write_fantasy(forecasts: pd.DataFrame, target: str, rosters: pd.DataFrame | 
     rookie_rows = rookies.current_rookies(rosters, forecasts.PLAYER_ID) if rosters is not None else pd.DataFrame()
     if not rookie_rows.empty:
         rookie_rows = rookie_rows.assign(rookie=True, tier=None, team=rookie_rows.TEAM_ABBREVIATION,
-                                         **{c: None for c in overrides.OUTPUT})
+                                         updated_low=None, updated_high=None, **{c: None for c in overrides.OUTPUT})
     cols = ["PLAYER_NAME", "team", "tier", "rookie", "draft_range", "played_so_far", "team_games_left",
-            "predicted_rest", "updated_total", *overrides.OUTPUT, *fantasy.STATS]
+            "predicted_rest", "updated_total", "updated_low", "updated_high", *overrides.OUTPUT, *fantasy.STATS]
     rows = pd.concat([veterans[cols], rookie_rows[cols]] if not rookie_rows.empty else [veterans[cols]])
     rows = rows.join(fantasy.score(rows[fantasy.STATS])[["espn", "yahoo", *[f"z_{c}" for c in [*fantasy.CATEGORIES, "total"]]]])
 
@@ -155,6 +155,9 @@ def write_fantasy(forecasts: pd.DataFrame, target: str, rosters: pd.DataFrame | 
             "playedSoFar": None if pd.isna(r.played_so_far) else int(r.played_so_far),
             "gamesLeft": int(r.team_games_left),
             "restGames": round(float(r.predicted_rest), 1),
+            # Likely range of rest-of-season games (none for rookies yet).
+            "restLow": None if pd.isna(r.updated_low) else round(float(r.updated_low - r.played_so_far), 1),
+            "restHigh": None if pd.isna(r.updated_high) else round(float(r.updated_high - r.played_so_far), 1),
             "seasonGames": round(float(r.updated_total), 1),
             "perGame": {"espn": round(float(r.espn), 2), "yahoo": round(float(r.yahoo), 2), "cat9": round(float(r.z_total), 2)},
             "cats": {c: round(float(r[f"z_{c}"]), 2) for c in fantasy.CATEGORIES},

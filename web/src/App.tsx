@@ -6,6 +6,7 @@ import About from './pages/About'
 import Accuracy from './pages/Accuracy'
 import Home from './pages/Home'
 import Rankings from './pages/Rankings'
+import Trade from './pages/Trade'
 
 // The player page carries the chart library, so it loads only when first opened.
 const Player = lazy(() => import('./pages/Player'))
@@ -46,6 +47,12 @@ function Shell() {
               Rankings
             </Link>
             <Link
+              to="/trade"
+              className={`text-sm font-medium transition hover:text-ink ${pathname === '/trade' ? 'text-ink' : 'text-muted'}`}
+            >
+              Trade
+            </Link>
+            <Link
               to="/accuracy"
               className={`text-sm font-medium transition hover:text-ink ${pathname === '/accuracy' ? 'text-ink' : 'text-muted'}`}
             >
@@ -78,6 +85,7 @@ function Shell() {
                 }
               />
               <Route path="/rankings" element={<Rankings meta={index.meta} teams={index.teams} />} />
+              <Route path="/trade" element={<Trade />} />
               <Route path="/accuracy" element={<Accuracy meta={index.meta} />} />
               <Route path="/about" element={<About meta={index.meta} />} />
               <Route path="*" element={<p className="py-16 text-muted">Page not found.</p>} />

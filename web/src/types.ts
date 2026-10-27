@@ -158,6 +158,9 @@ export interface FantasyPlayer {
   /** Team games left, and the games the updated forecast expects the player to play. */
   gamesLeft: number
   restGames: number
+  /** Likely range of rest-of-season games; null for rookies. */
+  restLow: number | null
+  restHigh: number | null
   /** Updated forecast for the whole season (played so far + rest). */
   seasonGames: number
   /** Per-game value: ESPN and Yahoo points, and total 9-category z-score. */

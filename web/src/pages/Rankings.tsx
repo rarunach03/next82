@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router'
 import TierPill from '../components/TierPill'
-import { shortDate, useFantasy } from '../data'
+import { fantasyValue, shortDate, useFantasy } from '../data'
 import type { FantasyFormat, FantasyPlayer, Meta, Team, Tier } from '../types'
 
 const FORMATS: { id: FantasyFormat; label: string }[] = [
@@ -63,7 +63,7 @@ export default function Rankings({ meta, teams }: { meta: Meta; teams: Team[] })
       const above = perGame - replacement
       const games = view === 'ros' ? p.restGames : p.seasonGames
       const missed = view === 'ros' ? p.gamesLeft - p.restGames : 82 - p.seasonGames
-      return { p, perGame, games, value: above * games, discount: Math.max(above, 0) * missed, perGameRank: 0, valueRank: 0 }
+      return { p, perGame, games, value: fantasyValue(perGame, replacement, games), discount: Math.max(above, 0) * missed, perGameRank: 0, valueRank: 0 }
     })
     const byPerGame = ranks(rows, (r) => r.perGame)
     const byValue = ranks(rows, (r) => r.value)

@@ -10,6 +10,7 @@ const routes = [
   'about',
   'rankings',
   'accuracy',
+  'trade',
   ...readdirSync(join(dist, 'data', 'players')).map((f) => `player/${f.replace('.json', '')}`),
 ]
 for (const route of routes) {

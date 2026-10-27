@@ -85,6 +85,8 @@ def test_fantasy_file(out):
     for p in fantasy["players"]:
         assert by_id[p["id"]]["updated"] is not None
         assert 0 <= p["restGames"] <= p["gamesLeft"]
+        if p["restLow"] is not None:  # trade analyzer ranges
+            assert p["restLow"] - 0.11 <= p["restGames"] <= p["restHigh"] + 0.11
     # Players with a preseason forecast but no updated one (unsigned, no games) aren't ranked.
     assert not any(by_id[i]["updated"] is None for i in ranked)
 

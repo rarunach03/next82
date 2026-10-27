@@ -96,6 +96,14 @@ export function baselineText(name: string): string {
   return name === 'Same as last year' ? "guessing last season's total" : "guessing each player's 3-season average"
 }
 
+/**
+ * Fantasy value above replacement: (per-game score - replacement) x games. Same
+ * formula as next82.fantasy.season_value, used by Rankings and Trade.
+ */
+export function fantasyValue(perGame: number, replacement: number, games: number): number {
+  return (perGame - replacement) * games
+}
+
 export function shortDate(iso: string): string {
   return new Date(`${iso.slice(0, 10)}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
