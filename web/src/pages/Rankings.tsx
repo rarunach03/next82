@@ -103,8 +103,8 @@ export default function Rankings({ meta, teams }: { meta: Meta; teams: Team[] })
 
   const cat9 = format === 'cat9'
   const fmt = (v: number, digits: number) => v.toLocaleString('en-US', { maximumFractionDigits: digits, minimumFractionDigits: digits })
-  const header = (key: SortKey, label: string, tip?: string) => (
-    <th className="py-3 pr-3 font-medium whitespace-nowrap">
+  const header = (key: SortKey, label: React.ReactNode, tip?: string) => (
+    <th className="py-3 pr-2 sm:pr-3 font-medium whitespace-nowrap">
       <button
         onClick={() => setSort((s) => ({ key, desc: s.key === key ? !s.desc : key !== 'name' }))}
         className={`uppercase transition hover:text-ink ${sort.key === key ? 'text-ink' : ''}`}
@@ -178,28 +178,33 @@ export default function Rankings({ meta, teams }: { meta: Meta; teams: Team[] })
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-line text-left text-xs tracking-wide text-faint">
-              <th className="w-12 py-3 pr-2 pl-4 font-medium uppercase">Rank</th>
+              <th className="w-10 py-3 pr-2 pl-3 sm:w-12 sm:pl-4 font-medium uppercase">Rank</th>
               {header('name', 'Player')}
-              <th className="hidden py-3 pr-3 font-medium whitespace-nowrap uppercase sm:table-cell">
+              <th className="hidden py-3 pr-2 sm:pr-3 font-medium whitespace-nowrap uppercase sm:table-cell">
                 Status
                 <Info tip="Injured: listed Out with an injury or with a known return timeline (hover the badge for the source). Missing games: out 5+ straight games without being on the injury report." />
               </th>
-              <th className="py-3 pr-3 font-medium whitespace-nowrap uppercase">
+              <th className="hidden py-3 pr-2 sm:pr-3 font-medium whitespace-nowrap uppercase sm:table-cell">
                 Availability
                 <Info tip={GLOSSARY.tier(meta.tierSafeLow, meta.setbackGames)} />
               </th>
-              {header('games', view === 'ros' ? 'Games left' : 'Season games')}
+              {header(
+                'games',
+                <>
+                  Games<span className="hidden sm:inline">{view === 'ros' ? ' left' : ' this season'}</span>
+                </>,
+              )}
               {header('value', 'Value', GLOSSARY.aboveReplacement(fantasy.poolSize))}
               {more && (
                 <>
                   {header('perGame', cat9 ? 'Per game (z)' : 'Per game')}
-                  <th className="py-3 pr-3 font-medium whitespace-nowrap uppercase">
+                  <th className="py-3 pr-2 sm:pr-3 font-medium whitespace-nowrap uppercase">
                     Per-game rank
                     <Info tip={GLOSSARY.perGameRank} />
                   </th>
                   {header('change', 'Rank change', GLOSSARY.rankChange)}
                   {header('discount', 'Durability discount', GLOSSARY.durability)}
-                  <th className="py-3 pr-3 font-medium whitespace-nowrap uppercase">
+                  <th className="py-3 pr-2 sm:pr-3 font-medium whitespace-nowrap uppercase">
                     Likely games
                     <Info tip={GLOSSARY.likelyRange} />
                   </th>
@@ -221,17 +226,17 @@ export default function Rankings({ meta, teams }: { meta: Meta; teams: Team[] })
                   onClick={r.p.rookie ? undefined : () => navigate(`/player/${r.p.id}`)}
                   className={`border-b border-line/60 transition last:border-0 ${r.p.rookie ? '' : 'cursor-pointer hover:bg-surface-2'}`}
                 >
-                  <td className="tabular py-3 pr-2 pl-4 font-display text-lg font-bold">{r.valueRank}</td>
-                  <td className="py-3 pr-3">
+                  <td className="tabular py-3 pr-2 pl-3 sm:pl-4 font-display text-lg font-bold">{r.valueRank}</td>
+                  <td className="py-3 pr-2 sm:pr-3">
                     <span className="font-medium">{r.p.name}</span>
                     <span className="ml-2 text-xs text-faint">{r.p.team}</span>
-                    {isInjured(r.p) && (
-                      <span className="ml-2 sm:hidden">
-                        <InjuredBadge p={r.p} />
-                      </span>
-                    )}
+                    {/* Phones: status and availability under the name, so games and value fit. */}
+                    <div className="mt-1 flex flex-wrap items-center gap-1.5 sm:hidden">
+                      {isInjured(r.p) && <InjuredBadge p={r.p} />}
+                      <Availability tier={r.p.tier} reason={r.p.noTierReason} safeLow={meta.tierSafeLow} riskyLow={meta.setbackGames} />
+                    </div>
                   </td>
-                  <td className="hidden py-3 pr-3 sm:table-cell">
+                  <td className="hidden py-3 pr-2 sm:pr-3 sm:table-cell">
                     {isInjured(r.p) ? (
                       <InjuredBadge p={r.p} />
                     ) : r.p.out ? (
@@ -240,10 +245,10 @@ export default function Rankings({ meta, teams }: { meta: Meta; teams: Team[] })
                       <span className="text-xs text-faint">Active</span>
                     )}
                   </td>
-                  <td className="py-3 pr-3">
+                  <td className="hidden py-3 pr-2 sm:pr-3 sm:table-cell">
                     <Availability tier={r.p.tier} reason={r.p.noTierReason} safeLow={meta.tierSafeLow} riskyLow={meta.setbackGames} />
                   </td>
-                  <td className="tabular py-3 pr-3 text-muted">
+                  <td className="tabular py-3 pr-2 sm:pr-3 text-muted">
                     {r.p.override && !r.p.override.latestReturn ? (
                       <Tip tip="No firm return date, so this uses the middle of the likely range.">~{Math.round(r.games)}</Tip>
                     ) : (
@@ -251,12 +256,12 @@ export default function Rankings({ meta, teams }: { meta: Meta; teams: Team[] })
                     )}
                     {view === 'ros' && <span className="hidden text-faint sm:inline"> of {r.p.gamesLeft}</span>}
                   </td>
-                  <td className="tabular py-3 pr-3 font-semibold">{fmt(r.value, 0)}</td>
+                  <td className="tabular py-3 pr-2 sm:pr-3 font-semibold">{fmt(r.value, 0)}</td>
                   {more && (
                     <>
-                      <td className="tabular py-3 pr-3">{fmt(r.perGame, cat9 ? 2 : 1)}</td>
-                      <td className="tabular py-3 pr-3 text-muted">{r.perGameRank}</td>
-                      <td className="tabular py-3 pr-3">
+                      <td className="tabular py-3 pr-2 sm:pr-3">{fmt(r.perGame, cat9 ? 2 : 1)}</td>
+                      <td className="tabular py-3 pr-2 sm:pr-3 text-muted">{r.perGameRank}</td>
+                      <td className="tabular py-3 pr-2 sm:pr-3">
                         {change === 0 ? (
                           <span className="text-faint">–</span>
                         ) : (
@@ -265,8 +270,8 @@ export default function Rankings({ meta, teams }: { meta: Meta; teams: Team[] })
                           </span>
                         )}
                       </td>
-                      <td className="tabular py-3 pr-3 text-muted">{r.discount > 0 ? `−${fmt(r.discount, 0)}` : '–'}</td>
-                      <td className="tabular py-3 pr-3 whitespace-nowrap text-muted">
+                      <td className="tabular py-3 pr-2 sm:pr-3 text-muted">{r.discount > 0 ? `−${fmt(r.discount, 0)}` : '–'}</td>
+                      <td className="tabular py-3 pr-2 sm:pr-3 whitespace-nowrap text-muted">
                         {r.p.restLow !== null && r.p.restHigh !== null && view === 'ros'
                           ? `${Math.round(r.p.restLow)}–${Math.round(r.p.restHigh)}`
                           : '–'}
