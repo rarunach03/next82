@@ -148,5 +148,7 @@ export interface Fantasy {
   /** This season's stats are blended with the prior as if the prior were this many games. */
   shrinkGames: number
   poolSize: number
+  /** Per-game score of the 156th-best player per game, by format. Value is measured above it. */
+  replacement: Record<FantasyFormat, number>
   players: FantasyPlayer[]
 }

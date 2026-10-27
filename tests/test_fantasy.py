@@ -56,3 +56,22 @@ def test_nine_cat_weights_percentages_by_attempts():
     z = fantasy.nine_cat(pg, pool_size=150)
     assert z.loc[0, "FG%"] > z.loc[1, "FG%"] > 0
     assert set(fantasy.CATEGORIES) <= set(z.columns)
+
+
+def test_more_games_never_lowers_value_above_replacement():
+    rng = np.random.default_rng(1)
+    per_game = rng.normal(0, 3, 500)
+    replacement = 0.5
+    games = rng.uniform(0, 80, 500)
+    more = games + rng.uniform(0, 10, 500)
+    above = per_game >= replacement
+    assert (fantasy.season_value(per_game, more, replacement)[above]
+            >= fantasy.season_value(per_game, games, replacement)[above]).all()
+    # Discount is zero below replacement and grows with missed games above it.
+    assert (fantasy.durability_discount(per_game, 10, replacement)[~above] == 0).all()
+    assert (fantasy.durability_discount(per_game, 10, replacement)[above] >= 0).all()
+
+
+def test_replacement_is_the_156th_best_per_game():
+    per_game = pd.DataFrame({f: np.arange(300, 0, -1, dtype=float) for f in fantasy.FORMATS})
+    assert fantasy.replacement_levels(per_game) == {f: 145.0 for f in fantasy.FORMATS}

@@ -139,6 +139,33 @@ def player_values(players: pd.DataFrame) -> pd.DataFrame:
     )
 
 
+FORMATS = ["espn", "yahoo", "cat9"]
+
+
+def replacement_levels(per_game: pd.DataFrame, pool_size: int = POOL_SIZE) -> dict[str, float]:
+    """Per-game score of the last rostered player (the 156th best per game) in each format.
+
+    Value is measured above this level: a player only adds value by beating what's
+    freely available, and in 9-cat most players outside the pool have negative z.
+    per_game: columns espn, yahoo, cat9.
+    """
+    return {
+        fmt: float(per_game[fmt].sort_values(ascending=False).iloc[min(pool_size, len(per_game)) - 1])
+        for fmt in FORMATS
+    }
+
+
+def season_value(per_game, games, replacement: float):
+    """Value above replacement over `games`. More games never lowers it for a player
+    above replacement; below replacement it's negative (not worth a roster spot)."""
+    return (np.asarray(per_game, dtype=float) - replacement) * np.asarray(games, dtype=float)
+
+
+def durability_discount(per_game, missed_games, replacement: float):
+    """Value above replacement lost to expected missed games (0 for players below replacement)."""
+    return np.maximum(np.asarray(per_game, dtype=float) - replacement, 0) * np.asarray(missed_games, dtype=float)
+
+
 # ---------------------------------------------------------------- choosing K
 
 def _snapshot_rows(season: str, player_games: pd.DataFrame, prior: pd.DataFrame) -> pd.DataFrame:

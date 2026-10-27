@@ -91,6 +91,7 @@ def write_fantasy(forecasts: pd.DataFrame, target: str):
         return
     rows = ranked.set_index("PLAYER_ID").join(values, how="inner")
     k = json.loads(fantasy.METRICS_PATH.read_text())["shrink_k"]
+    replacement = fantasy.replacement_levels(rows.rename(columns={"z_total": "cat9"}))
     players = []
     for pid, r in rows.iterrows():
         players.append({
@@ -111,6 +112,8 @@ def write_fantasy(forecasts: pd.DataFrame, target: str):
         "season": target,
         "shrinkGames": k,
         "poolSize": fantasy.POOL_SIZE,
+        # Per-game score of the 156th-best player per game; values are measured above it.
+        "replacement": {fmt: round(v, 3) for fmt, v in replacement.items()},
         "scoring": fantasy.POINTS,
         "players": players,
     })

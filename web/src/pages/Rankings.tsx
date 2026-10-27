@@ -55,11 +55,15 @@ export default function Rankings({ meta, teams }: { meta: Meta; teams: Team[] })
   // Ranks are computed over every player, so filtering never changes a player's rank.
   const allRows = useMemo<Row[]>(() => {
     if (!fantasy) return []
+    // Value above replacement (the 156th-best player per game), so more games never
+    // lowers the value of a player worth rostering. Same formulas as next82.fantasy.
+    const replacement = fantasy.replacement[format]
     const rows = fantasy.players.map((p) => {
       const perGame = p.perGame[format]
+      const above = perGame - replacement
       const games = view === 'ros' ? p.restGames : p.seasonGames
       const missed = view === 'ros' ? p.gamesLeft - p.restGames : 82 - p.seasonGames
-      return { p, perGame, games, value: perGame * games, discount: Math.max(perGame, 0) * missed, perGameRank: 0, valueRank: 0 }
+      return { p, perGame, games, value: above * games, discount: Math.max(above, 0) * missed, perGameRank: 0, valueRank: 0 }
     })
     const byPerGame = ranks(rows, (r) => r.perGame)
     const byValue = ranks(rows, (r) => r.value)
@@ -109,9 +113,10 @@ export default function Rankings({ meta, teams }: { meta: Meta; teams: Team[] })
       <p className="text-sm font-semibold tracking-widest text-accent uppercase">Fantasy</p>
       <h1 className="mt-2 font-display text-5xl leading-none font-extrabold tracking-tight uppercase">Rankings</h1>
       <p className="mt-4 max-w-2xl text-muted">
-        {view === 'ros' ? 'Rest-of-season' : 'Full-season'} value is per-game production times the games each player is
-        forecast to play{view === 'ros' ? ' from here on' : ' this season'}. Players who miss games drop below their
-        per-game rank. This season's stats are blended with the last three seasons, weighted like{' '}
+        {view === 'ros' ? 'Rest-of-season' : 'Full-season'} value is per-game production above replacement level (the{' '}
+        {fantasy.poolSize}th-best player per game, roughly the best free agent) times the games each player is forecast
+        to play{view === 'ros' ? ' from here on' : ' this season'}. Players who miss games drop below their per-game
+        rank. This season's stats are blended with the last three seasons, weighted like{' '}
         {fantasy.shrinkGames} extra games, so a hot start doesn't take over.
       </p>
 
