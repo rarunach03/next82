@@ -126,10 +126,17 @@ def select(players: pd.DataFrame, news: pd.DataFrame, state: dict, today: pd.Tim
 
 # ---------------------------------------------------------------- Claude Code
 
+# The standalone CLI from Anthropic's native installer (https://claude.ai/install.sh).
+STANDALONE_CLAUDE = Path.home() / ".local" / "bin" / "claude"
+
+
 def claude_binary() -> str | None:
-    """The claude CLI: $NEXT82_CLAUDE, then PATH, then the newest copy bundled with the VS Code extension."""
+    """The claude CLI: $NEXT82_CLAUDE, the standalone install, PATH, then the newest copy
+    bundled with the VS Code extension as a fallback."""
     if os.environ.get("NEXT82_CLAUDE"):
         return os.environ["NEXT82_CLAUDE"]
+    if os.access(STANDALONE_CLAUDE, os.X_OK):
+        return str(STANDALONE_CLAUDE)
     found = shutil.which("claude")
     if found:
         return found
@@ -169,13 +176,16 @@ def prompt(players: pd.DataFrame, today: pd.Timestamp, last_regular_season_day: 
             if isinstance(override, str) else "",
         ]))
     after_season = day(last_regular_season_day + pd.Timedelta(days=1)) if pd.notna(last_regular_season_day) else ""
+    rejected = auto_overrides.load_rejected()
+    rejected_text = ("Never use these sources, which were rejected:\n" + "\n".join(
+        f"  {r.source_url} ({r.reason})" for r in rejected.itertuples()) + "\n") if len(rejected) else ""
     return f"""Today is {day(today)}. You keep the injury timelines file for an NBA forecasting site.
 
 Task: for each player below, search the news for a return timeline that the team announced or that a
 major outlet (ESPN, The Athletic, NBA.com, team websites, AP, Yahoo Sports, Bleacher Report, a team beat
 reporter) reported, such as "out 6-8 weeks", "will be re-evaluated in 4 weeks" or "out for the season".
 Only add a row when a dated source clearly states a timeline for this injury. Never guess, estimate or
-infer a timeline. If you find nothing clear for a player, add nothing for him.
+infer a timeline. If you find nothing clear for a player, add nothing for that player.
 
 Edit the file {NEWS_FILE} (read it first). Add one row per player with a timeline, or replace that
 player's existing row if the new source is more recent. Don't touch other rows. Columns:
@@ -186,9 +196,13 @@ player's existing row if the new source is more recent. Don't touch other rows. 
   source_url       the exact URL of the article or team statement that states the timeline
   date_found       {day(today)}
   source_date      YYYY-MM-DD the source was published
+  timeline_type    "re-evaluation" if the source gives a date or time to re-evaluate, re-examine or check
+                   again ("re-evaluated in 4 weeks"); "return" if it says when the player is expected back
+                   or how long the player will be out ("out 6-8 weeks", "out for the season")
+A date for a status update or check-in, with no expected return or re-evaluation, is not a timeline.
 "Out for the season" means earliest_return = {after_season} (the day after the regular season ends), latest_return blank.
 Quote fields containing commas. Don't create or edit any other file.
-
+{rejected_text}
 Players (id | name | team | report status | report reason | report date | last game | current estimate):
 """ + "\n".join(lines) + "\n\nWhen done, reply with one line per row you added or changed (player, timeline, source)."
 
@@ -257,6 +271,7 @@ def validate(rows: pd.DataFrame, players: pd.DataFrame, today: pd.Timestamp, url
         return pd.DataFrame(columns=auto_overrides.NEWS_COLUMNS), [
             f"wrong columns {list(rows.columns)} (expected {auto_overrides.NEWS_COLUMNS}); all rows rejected"]
     known = players.set_index("player_id")
+    rejected = set(auto_overrides.load_rejected().source_url)
     good, problems = [], []
     for r in rows.itertuples(index=False):
         try:
@@ -278,6 +293,10 @@ def validate(rows: pd.DataFrame, players: pd.DataFrame, today: pd.Timestamp, url
                 raise ValueError("latest_return is before earliest_return")
             if not str(r.note).strip():
                 raise ValueError("note is empty")
+            if r.timeline_type not in auto_overrides.TIMELINE_TYPES:
+                raise ValueError(f"timeline_type must be one of {auto_overrides.TIMELINE_TYPES}: {r.timeline_type!r}")
+            if str(r.source_url).strip() in rejected:
+                raise ValueError(f"source was rejected before: {r.source_url}")
             url = urlparse(str(r.source_url).strip())
             if url.scheme not in ("http", "https") or "." not in url.netloc:
                 raise ValueError(f"source_url isn't a URL: {r.source_url!r}")
@@ -288,7 +307,7 @@ def validate(rows: pd.DataFrame, players: pd.DataFrame, today: pd.Timestamp, url
             continue
         good.append({"player_id": pid, "earliest_return": earliest, "latest_return": latest,
                      "note": str(r.note).strip(), "source_url": str(r.source_url).strip(),
-                     "date_found": found, "source_date": published})
+                     "date_found": found, "source_date": published, "timeline_type": r.timeline_type})
     return pd.DataFrame(good, columns=auto_overrides.NEWS_COLUMNS), problems
 
 

@@ -195,3 +195,19 @@ def test_expired_news_timeline_falls_back_to_the_estimate():
     rows, lines = auto_overrides.build(log, RECOVERY, stale, [], pd.Series({1: pd.Timestamp("2026-10-29")}), None, TODAY)
     assert rows.iloc[0].kind == "automatic" and any("expired" in line for line in lines)
     assert auto_overrides.news_over_manual(stale, _manual("2026-10-26"), TODAY)[0].empty
+
+
+def test_reevaluation_timeline_is_flagged_and_rejected_sources_are_dropped(tmp_path, monkeypatch):
+    log = _log([{"PLAYER_ID": 1, "team": "A", "status": "Out", "injury_type": "strain", "body_part": "hamstring strain",
+                 "report_day": "2026-10-30"}])
+    news = pd.DataFrame([{"player_id": 1, "earliest_return": pd.Timestamp("2026-11-08"), "latest_return": pd.NaT,
+                          "note": "Re-evaluated in 2 weeks", "source_url": "https://news/1",
+                          "date_found": TODAY, "source_date": TODAY, "timeline_type": "re-evaluation"}])
+    r = _build(log, news=news).loc[1]
+    assert r.kind == "news" and r.reevaluation and r.earliest_return == pd.Timestamp("2026-11-08")
+    path = tmp_path / "news.csv"
+    news.to_csv(path, index=False)
+    rejected = tmp_path / "rejected.csv"
+    pd.DataFrame([{"player_id": 1, "source_url": "https://news/1", "reason": "x", "date_rejected": "2026-10-27"}]).to_csv(rejected, index=False)
+    monkeypatch.setattr(auto_overrides, "REJECTED_PATH", rejected)
+    assert auto_overrides.load_news(path).empty

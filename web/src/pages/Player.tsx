@@ -152,6 +152,8 @@ function sentence(p: PlayerDetail, meta: Meta): string {
       `${when.startsWith('out for the season') ? when : `out, ${when}`}${injury ? ` (${injury})` : ''}, so no more games are expected this season.`,
     )
   }
+  if (o?.reevaluation)
+    return capitalize(`${out}, with a ${returnText(o)}; about ${rest} of the team's ${p.gamesLeft} remaining games are expected.`)
   if (o) return capitalize(`${out}, ${returnText(o)}, which leaves room for about ${rest} of the team's ${p.gamesLeft} remaining games.`)
   if (p.out?.reason === 'injury report') return capitalize(`listed ${out} on the latest injury report with no return date yet, and ${games}.`)
   if (p.absenceStreak !== null && p.absenceStreak >= 2)
@@ -175,9 +177,7 @@ function Details({ p, meta }: { p: PlayerDetail; meta: Meta }) {
             <TierPill tier={p.tier} /> {tierText(p.tier, meta.tierSafeLow, meta.setbackGames)}
           </>
         ) : (
-          p.updated !== null &&
-          !p.rotationRole &&
-          'No availability tier: not in a regular rotation role, so playing time depends more on the coach than on health.'
+          p.noTierReason && <>No availability tier: {GLOSSARY.noTier[p.noTierReason]}</>
         )}
       </p>
 

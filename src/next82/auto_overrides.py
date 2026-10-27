@@ -42,8 +42,15 @@ END_OF_LAST_SEASON_PATH = config.PROCESSED_DIR / f"injuries_end_of_season_before
 OVERDUE_WINDOW_DAYS = 14
 # Statuses on the end-of-season report that aren't injuries.
 NOT_AN_INJURY = ["rest", "not injury", "illness", "personal", "suspension"]
-# date_found: when the row was added; source_date: when the source was published.
-NEWS_COLUMNS = ["player_id", "earliest_return", "latest_return", "note", "source_url", "date_found", "source_date"]
+# date_found: when the row was added; source_date: when the source was published;
+# timeline_type: "return" (expected back) or "re-evaluation" (a date to be checked again,
+# still used as the earliest return).
+NEWS_COLUMNS = ["player_id", "earliest_return", "latest_return", "note", "source_url", "date_found", "source_date",
+                "timeline_type"]
+TIMELINE_TYPES = ("return", "re-evaluation")
+# Sources a person rejected (e.g. a check-in date, not a timeline): never used again.
+REJECTED_PATH = config.ROOT / "data" / "news_rejected.csv"
+REJECTED_COLUMNS = ["player_id", "source_url", "reason", "date_rejected"]
 
 
 def load_recovery(path=None) -> pd.DataFrame:
@@ -57,6 +64,9 @@ def load_news(path=None) -> pd.DataFrame:
     if not path.exists():
         return pd.DataFrame(columns=NEWS_COLUMNS)
     df = pd.read_csv(path, dtype={"player_id": "Int64"}).reindex(columns=NEWS_COLUMNS)
+    df["timeline_type"] = df.timeline_type.fillna("return")
+    rejected = set(load_rejected().source_url)
+    df = df[~df.source_url.isin(rejected)]
     for c in ("earliest_return", "latest_return", "date_found", "source_date"):
         df[c] = pd.to_datetime(df[c])
     return df
@@ -110,7 +120,7 @@ def build(log: pd.DataFrame | None, recovery: pd.DataFrame, news: pd.DataFrame, 
         already_out = set(e.PLAYER_ID.astype(int))
     rows, lines = [], []
     if log is None or log.empty:
-        return pd.DataFrame(columns=[*COLUMNS, "kind"]), lines
+        return pd.DataFrame(columns=[*COLUMNS, "kind", "reevaluation"]), lines
     played_after = {}
     if player_games is not None and len(player_games):
         dates = pd.to_datetime(player_games.GAME_DATE.astype(str).str[:10])
@@ -159,12 +169,21 @@ def build(log: pd.DataFrame | None, recovery: pd.DataFrame, news: pd.DataFrame, 
             "player_id": pid, "player_name": r.player_name, "status": "Out",
             "earliest_return": earliest, "latest_return": latest, "estimated": estimated, "note": note,
             "source_url": source, "source_url_2": source2, "date_added": r.report_day, "review_by": pd.NaT,
-            "kind": kind,
+            "kind": kind, "reevaluation": news_row is not None and reevaluation(news_row),
         })
         lines.append(f"Automatic override ({kind}): {r.player_name}, {r.injury_type} "
                      f"({r.body_part or 'no body part'}), back no earlier than {pd.Timestamp(earliest):%Y-%m-%d}"
                      + (f", by {pd.Timestamp(latest):%Y-%m-%d}" if pd.notna(latest) else ", no latest return"))
-    return pd.DataFrame(rows, columns=[*COLUMNS, "kind"]), lines
+    return pd.DataFrame(rows, columns=[*COLUMNS, "kind", "reevaluation"]), lines
+
+
+def load_rejected(path=None) -> pd.DataFrame:
+    path = path or REJECTED_PATH
+    return pd.read_csv(path) if path.exists() else pd.DataFrame(columns=REJECTED_COLUMNS)
+
+
+def reevaluation(n) -> bool:
+    return getattr(n, "timeline_type", "return") == "re-evaluation"
 
 
 def expired(n, today: pd.Timestamp) -> bool:
@@ -197,12 +216,12 @@ def news_over_manual(news: pd.DataFrame, manual: pd.DataFrame, today: pd.Timesta
             "player_id": int(m.player_id), "player_name": m.player_name, "status": "Out",
             "earliest_return": n.earliest_return, "latest_return": n.latest_return, "estimated": False,
             "note": f"Team timeline: {n.note}", "source_url": n.source_url, "source_url_2": m.source_url,
-            "date_added": n.date_found, "review_by": pd.NaT, "kind": "news",
+            "date_added": n.date_found, "review_by": pd.NaT, "kind": "news", "reevaluation": reevaluation(n),
         })
         lines.append(f"News override (replaces manual row from {m.date_added:%Y-%m-%d}): {m.player_name}, back no earlier "
                      f"than {n.earliest_return:%Y-%m-%d}" + (f", by {n.latest_return:%Y-%m-%d}" if pd.notna(n.latest_return)
                                                               else ", no latest return") + f" ({n.source_url})")
-    return pd.DataFrame(rows, columns=[*COLUMNS, "kind"]), lines
+    return pd.DataFrame(rows, columns=[*COLUMNS, "kind", "reevaluation"]), lines
 
 
 def current(manual: pd.DataFrame, today: pd.Timestamp) -> tuple[pd.DataFrame, pd.DataFrame, list[str]]:

@@ -43,7 +43,6 @@ function Shell() {
               </div>
             )}
             <NavMenu
-              key={pathname}
               label="Players"
               pathname={pathname}
               items={[
@@ -52,7 +51,6 @@ function Shell() {
               ]}
             />
             <NavMenu
-              key={pathname}
               label="Fantasy"
               pathname={pathname}
               items={[
@@ -62,7 +60,6 @@ function Shell() {
               ]}
             />
             <NavMenu
-              key={pathname}
               label="How it works"
               pathname={pathname}
               align="right"
@@ -108,8 +105,8 @@ function Shell() {
   )
 }
 
-/** A header menu: tap or click to open; closes on Escape or a tap elsewhere, and on
- * navigation (the parent keys it by path, so it starts closed on each page). */
+/** A header menu: tap or click to open; closes on Escape, a tap elsewhere or navigation
+ * (it remembers the page it was opened on and counts as open only there). */
 function NavMenu({
   label,
   items,
@@ -121,13 +118,16 @@ function NavMenu({
   pathname: string
   align?: 'left' | 'right'
 }) {
-  const [open, setOpen] = useState(false)
+  const [openOn, setOpenOn] = useState<string | null>(null)
+  const open = openOn === pathname
+  const setOpen = (next: boolean | ((was: boolean) => boolean)) =>
+    setOpenOn((typeof next === 'function' ? next(open) : next) ? pathname : null)
   const ref = useRef<HTMLDivElement>(null)
   const active = items.some((i) => i.to === pathname)
   useEffect(() => {
     if (!open) return
-    const outside = (e: PointerEvent) => !ref.current?.contains(e.target as Node) && setOpen(false)
-    const escape = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false)
+    const outside = (e: PointerEvent) => !ref.current?.contains(e.target as Node) && setOpenOn(null)
+    const escape = (e: KeyboardEvent) => e.key === 'Escape' && setOpenOn(null)
     window.addEventListener('pointerdown', outside)
     window.addEventListener('keydown', escape)
     return () => {

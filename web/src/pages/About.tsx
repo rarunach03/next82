@@ -146,8 +146,19 @@ export default function About({ meta }: { meta: Meta }) {
         </p>
         <p>
           Thirty regular seasons of NBA stats, from 1996-97 through {meta.dataThrough}, plus this season's games, from
-          stats.nba.com via the open-source nba_api library. There's no public injury data, so long absences are worked
-          out by matching each player's games against their team's schedule.
+          stats.nba.com via the open-source nba_api library. Injury statuses come from the NBA's official injury report;
+          absences without a listing are worked out by matching each player's games against their team's schedule.
+        </p>
+        <p>
+          The site lives at{' '}
+          <a href="https://next82.vercel.app" className="text-accent">
+            next82.vercel.app
+          </a>{' '}
+          (the old GitHub Pages address redirects there). The code and data are on{' '}
+          <a href="https://github.com/rarunach03/next82" className="text-accent">
+            GitHub
+          </a>
+          .
         </p>
       </Section>
 

@@ -3,7 +3,7 @@
 # order (next82.data --current), then rebuilds everything the site shows from them
 # (next82.export): updated forecasts and their ranges, availability tiers, fantasy
 # values including rookies, and the accuracy page. The preseason forecast stays frozen.
-# Commits and pushes only if something changed; GitHub Actions then redeploys the site.
+# Commits and pushes only if something changed; Vercel then redeploys the site.
 # Runs on a home computer because stats.nba.com doesn't respond to cloud servers.
 #
 # Safe to run as often as you like (the launchd job runs it hourly, so it catches up
@@ -24,7 +24,7 @@ set -euo pipefail
 
 COMMIT_MESSAGE="Refresh rosters and games so far"
 TIMELINES_MESSAGE="Update injury timelines"
-TIMELINE_FILES=(data/news_timelines.csv data/overrides.csv)
+TIMELINE_FILES=(data/news_timelines.csv data/news_rejected.csv data/overrides.csv)
 
 timelines_hash() { cat "${TIMELINE_FILES[@]}" 2>/dev/null | shasum | cut -d' ' -f1; }
 

@@ -1,6 +1,6 @@
 # Next82
 
-**Live site: https://rarunach03.github.io/next82/**
+**Live site: https://next82.vercel.app** (the old GitHub Pages address redirects there)
 
 Next82 forecasts how many games every NBA player will play this season (2026-27), explains
 what drives each number, and turns it into fantasy basketball rankings.
@@ -107,7 +107,8 @@ until the pipeline is rerun, the site says newer data is available. Set
 order and the latest official injury report,
 runs `python -m next82.export` (updated forecasts, automatic injury adjustments, ranges, tiers,
 fantasy values including rookies, back-to-backs, the stash list and accuracy), and commits and pushes if anything changed. Each push redeploys the site
-through GitHub Actions (`.github/workflows/deploy-pages.yml`). After the injury report is read, it
+on Vercel (https://next82.vercel.app, built from `web/`); the old GitHub Pages address only
+redirects there (`.github/workflows/deploy-pages.yml`, `pages-redirect/`). After the injury report is read, it
 runs the news step (`scripts/news_timelines.sh`, below); if that fails or times out, the refresh
 carries on. If `data/news_timelines.csv` or `data/overrides.csv` changed since the last refresh, it
 re-exports and pushes even on a day it already ran.

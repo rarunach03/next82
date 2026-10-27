@@ -40,6 +40,7 @@ export interface Meta {
 }
 
 export type Tier = 'Safe' | 'Moderate' | 'Risky'
+export type NoTierReason = 'comeback' | 'missed' | 'bench' | 'rookie'
 
 /** A manual injury adjustment to the updated forecast (data/overrides.csv). */
 export interface Override {
@@ -57,6 +58,8 @@ export interface Override {
   latestReturn: string | null
   /** No return window known: shown as "Out indefinitely". */
   indefinite: boolean
+  /** A team timeline that's a re-evaluation date, not an expected return. */
+  reevaluation: boolean
   /** Past its review-by date. */
   needsReview: boolean
 }
@@ -116,6 +119,8 @@ export interface PlayerSummary {
    * players in a rotation role; null otherwise. */
   tier: Tier | null
   rotationRole: boolean
+  /** Why there's no tier: back from a missed season, too few games last season, or a bench role. */
+  noTierReason: NoTierReason | null
   /** Not on any current roster. */
   notOnRoster: boolean
   override: Override | null
@@ -170,6 +175,7 @@ export interface FantasyPlayer {
   name: string
   team: string | null
   tier: Tier | null
+  noTierReason: NoTierReason | null
   /** In their first NBA season: ranked from this season's games plus a draft-range baseline. */
   rookie: boolean
   draftRange: string | null

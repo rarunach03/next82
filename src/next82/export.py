@@ -106,6 +106,19 @@ def out_info(forecasts: pd.DataFrame, team_ids: pd.Series, today: pd.Timestamp) 
     return out
 
 
+def no_tier_reason(r) -> str | None:
+    """Why a player has no availability tier (None if they have one or no forecast):
+    'comeback' (missed all of last season), 'missed' (rotation minutes but under the
+    share of games a rotation role needs, usually from injuries) or 'bench' (fewer
+    minutes than a rotation role)."""
+    if isinstance(r.tier, str) or pd.isna(r.updated_total):
+        return None
+    if r.missed_season == 1:
+        return "comeback"
+    mpg = r.mpg if pd.notna(r.mpg) else r.mpg_lag1
+    return "missed" if pd.notna(mpg) and mpg >= config.ROTATION_MIN_MPG else "bench"
+
+
 def regular_season_end() -> str | None:
     schedule = data.saved_schedule()
     if schedule is None or schedule.empty:
@@ -156,6 +169,8 @@ def override_json(r) -> dict | None:
         "earliestReturn": day(r.override_earliest),
         "latestReturn": day(r.override_latest),
         "indefinite": bool(r.override_indefinite),
+        # A team timeline that's a re-evaluation date: shown as "re-evaluation around <date>".
+        "reevaluation": bool(r.override_reevaluation == True),  # noqa: E712 (None when not set)
         # Past its review-by date: the site flags it so it can't be missed.
         "needsReview": bool(r.override_kind == "manual" and r.override_review_by is not None and pd.notna(r.override_review_by)
                             and pd.Timestamp(r.override_review_by) < pd.Timestamp.today().normalize()),
@@ -206,13 +221,14 @@ def write_fantasy(forecasts: pd.DataFrame, target: str, rosters: pd.DataFrame | 
         return
     veterans = ranked.join(per_game[fantasy.STATS], how="inner").assign(rookie=False, draft_range=None)
     veterans["team"] = veterans.TEAM_ABBREVIATION_NOW
+    veterans["no_tier_reason"] = [no_tier_reason(r) for r in veterans.itertuples()]
     rookie_rows = rookies.current_rookies(rosters, forecasts.PLAYER_ID) if rosters is not None else pd.DataFrame()
     if not rookie_rows.empty:
-        rookie_rows = rookie_rows.assign(rookie=True, tier=None, team=rookie_rows.TEAM_ABBREVIATION,
+        rookie_rows = rookie_rows.assign(rookie=True, tier=None, no_tier_reason="rookie", team=rookie_rows.TEAM_ABBREVIATION,
                                          updated_low=None, updated_high=None, b2b_left=np.nan, b2b_rate=np.nan,
                                          **{c: None for c in OUT_COLUMNS},
                                          **{c: None for c in overrides.OUTPUT})
-    cols = ["PLAYER_NAME", "team", "tier", "rookie", "draft_range", "played_so_far", "team_games_left",
+    cols = ["PLAYER_NAME", "team", "tier", "no_tier_reason", "rookie", "draft_range", "played_so_far", "team_games_left",
             "predicted_rest", "updated_total", "updated_low", "updated_high", "b2b_left", "b2b_rate",
             *OUT_COLUMNS, *overrides.OUTPUT, *fantasy.STATS]
     rows = pd.concat([veterans[cols], rookie_rows[cols]] if not rookie_rows.empty else [veterans[cols]])
@@ -228,6 +244,7 @@ def write_fantasy(forecasts: pd.DataFrame, target: str, rosters: pd.DataFrame | 
             "name": r.PLAYER_NAME,
             "team": r.team if pd.notna(r.team) else None,
             "tier": r.tier if isinstance(r.tier, str) else None,
+            "noTierReason": r.no_tier_reason if isinstance(r.no_tier_reason, str) else None,
             "rookie": bool(r.rookie),
             "draftRange": r.draft_range,
             "override": override_json(r),
@@ -417,6 +434,7 @@ def main():
             "updatedHigh": round_or_none(r.updated_high, 0),
             "tier": r.tier,
             "rotationRole": bool(r.rotation_role),
+            "noTierReason": no_tier_reason(r),
             "notOnRoster": bool(r.not_on_roster),
             "override": override_json(r),
             "out": out_json(r),

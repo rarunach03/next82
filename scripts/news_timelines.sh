@@ -4,6 +4,8 @@
 # runs non-interactively in a sandbox folder with web search, web fetch and the news
 # file only; its rows are validated in Python before they reach data/news_timelines.csv.
 # Called by refresh.sh after the injury report step; refresh.sh commits.
+# Uses the standalone Claude Code CLI (~/.local/bin/claude) if installed, else the copy
+# bundled with the VS Code extension; set NEXT82_CLAUDE to use another.
 # The Python step has its own timeout; this one is a backstop.
 set -uo pipefail
 cd "$(dirname "$0")/.."

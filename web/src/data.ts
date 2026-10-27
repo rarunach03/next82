@@ -126,6 +126,8 @@ export function playedText(games: number, seasonGames: number): string {
 /** One-line description of a manual adjustment's status. */
 export function overrideStatus(o: Override): string {
   if (o.indefinite) return 'Out indefinitely'
+  if (o.reevaluation && o.earliestReturn)
+    return `Out · re-evaluation around ${shortDate(o.earliestReturn)}${o.latestReturn ? `–${shortDate(o.latestReturn)}` : ''}`
   if (o.estimated && o.earliestReturn && o.latestReturn)
     return `Estimated return ${shortDate(o.earliestReturn)}–${shortDate(o.latestReturn)} (our estimate, not the team's)`
   if (o.estimated && o.earliestReturn)
@@ -172,6 +174,15 @@ export function returnText(o: Override): string {
     return o.estimated
       ? `not expected back this season (${whose}: ${shortDate(o.earliestReturn)}, ${o.earliestReturn.slice(0, 4)} at the earliest)`
       : `out for the season (${whose})`
+  // A date to be checked again, not a return: say so (it's still the earliest return used).
+  if (o.reevaluation) {
+    const when = o.latestReturn
+      ? `${shortDate(o.earliestReturn)}–${shortDate(o.latestReturn)}`
+      : shortDate(o.earliestReturn)
+    return o.earliestReturn.slice(0, 10) <= today()
+      ? `re-evaluation was due around ${when} (${whose})`
+      : `re-evaluation around ${when} (${whose})`
+  }
   // Window already open: the earliest date has passed.
   if (o.earliestReturn.slice(0, 10) <= today())
     return o.latestReturn ? `could return any day, by ${shortDate(o.latestReturn)} (${whose})` : `could return any day (${whose})`

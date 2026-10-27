@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router'
 import InjuredBadge from '../components/InjuredBadge'
-import TierPill from '../components/TierPill'
+import Availability from '../components/Availability'
 import Tip from '../components/Tip'
 import { GLOSSARY } from '../glossary'
 import { fantasyValue, isInjured, shortDate, useFantasy } from '../data'
@@ -180,9 +180,13 @@ export default function Rankings({ meta, teams }: { meta: Meta; teams: Team[] })
             <tr className="border-b border-line text-left text-xs tracking-wide text-faint">
               <th className="w-12 py-3 pr-2 pl-4 font-medium uppercase">Rank</th>
               {header('name', 'Player')}
-              <th className="py-3 pr-3 font-medium whitespace-nowrap uppercase">
+              <th className="hidden py-3 pr-3 font-medium whitespace-nowrap uppercase sm:table-cell">
                 Status
-                <Info tip={`Injured (hover for the source), or the availability tier: ${GLOSSARY.tier(meta.tierSafeLow, meta.setbackGames)}`} />
+                <Info tip="Injured: listed Out with an injury or with a known return timeline (hover the badge for the source). Missing games: out 5+ straight games without being on the injury report." />
+              </th>
+              <th className="py-3 pr-3 font-medium whitespace-nowrap uppercase">
+                Availability
+                <Info tip={GLOSSARY.tier(meta.tierSafeLow, meta.setbackGames)} />
               </th>
               {header('games', view === 'ros' ? 'Games left' : 'Season games')}
               {header('value', 'Value', GLOSSARY.aboveReplacement(fantasy.poolSize))}
@@ -221,22 +225,23 @@ export default function Rankings({ meta, teams }: { meta: Meta; teams: Team[] })
                   <td className="py-3 pr-3">
                     <span className="font-medium">{r.p.name}</span>
                     <span className="ml-2 text-xs text-faint">{r.p.team}</span>
+                    {isInjured(r.p) && (
+                      <span className="ml-2 sm:hidden">
+                        <InjuredBadge p={r.p} />
+                      </span>
+                    )}
                   </td>
-                  <td className="py-3 pr-3">
+                  <td className="hidden py-3 pr-3 sm:table-cell">
                     {isInjured(r.p) ? (
                       <InjuredBadge p={r.p} />
-                    ) : r.p.tier ? (
-                      <TierPill tier={r.p.tier} safeLow={meta.tierSafeLow} riskyLow={meta.setbackGames} />
-                    ) : r.p.rookie ? (
-                      <Tip
-                        tip={`Rookie (${r.p.draftRange}): this season's stats blended with past rookies from the same draft range.`}
-                        className="inline-flex cursor-help rounded-full border border-line px-2 py-0.5 text-xs font-semibold text-muted"
-                      >
-                        Rookie
-                      </Tip>
+                    ) : r.p.out ? (
+                      <span className="text-xs text-muted">Missing games</span>
                     ) : (
-                      <span className="text-faint">–</span>
+                      <span className="text-xs text-faint">Active</span>
                     )}
+                  </td>
+                  <td className="py-3 pr-3">
+                    <Availability tier={r.p.tier} reason={r.p.noTierReason} safeLow={meta.tierSafeLow} riskyLow={meta.setbackGames} />
                   </td>
                   <td className="tabular py-3 pr-3 text-muted">
                     {r.p.override && !r.p.override.latestReturn ? (
