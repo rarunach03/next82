@@ -24,6 +24,8 @@ BASELINE_PATH = config.PROCESSED_DIR / f"rookie_baseline_{config.FORECAST_SEASON
 METRICS_PATH = config.MODELS_DIR / "rookie_metrics.json"
 
 MIN_GAMES = 5
+# The in-season model without injury features: with them, rookie validation got worse (5.79 -> 6.17 games).
+FEATURES_USED = in_season.BASE_FEATURES
 DRAFT_RANGES = [(1, 5, "picks 1-5"), (6, 14, "picks 6-14"), (15, 30, "picks 15-30"), (31, 60, "picks 31-60")]
 UNDRAFTED = "undrafted"
 VALIDATION_SEASON = "2023-24"
@@ -118,7 +120,8 @@ def current_rookies(rosters: pd.DataFrame, forecast_ids, models_dir=config.MODEL
                                        known_teams=rosters.set_index("PLAYER_ID").TEAM_ID)
     method = settings["games_method"]
     if method == "in-season model":
-        rest = in_season.predict_rest(lgb.Booster(model_file=str(models_dir / in_season.MODEL_PATH.name)), snap)
+        model = lgb.Booster(model_file=str(models_dir / in_season.NO_INJURY_MODEL_PATH.name))
+        rest = in_season.predict_rest(model, snap, FEATURES_USED)
     else:
         rest = games_predictions(snap, None, json.loads(in_season.METRICS_PATH.read_text())["blend_k"])[method]
     snap = snap.set_index("PLAYER_ID").assign(predicted_rest=rest)
@@ -178,7 +181,7 @@ def games_predictions(snaps: pd.DataFrame, model, blend_k: float) -> dict[str, n
         "current pace": in_season.baseline_pace(snaps),
     }
     if model is not None:
-        preds = {"in-season model": in_season.predict_rest(model, snaps)} | preds
+        preds = {"in-season model": in_season.predict_rest(model, snaps, FEATURES_USED)} | preds
     return preds
 
 
@@ -201,7 +204,7 @@ def main():
         """Baseline from rookies before `before`; in-season model trained on seasons before it."""
         base = baseline(rookies[rookies.SEASON < before])
         snaps = pd.concat([rookie_snapshots(s, rookies, base, player_games, team_games) for s in seasons])
-        model = in_season.fit(snapshots[snapshots.SEASON < before], **params)
+        model = in_season.fit(snapshots[snapshots.SEASON < before], FEATURES_USED, **params)
         return snaps, base, model
 
     val_snaps, val_base, val_model = evaluate_on([VALIDATION_SEASON], VALIDATION_SEASON)

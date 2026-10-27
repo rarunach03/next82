@@ -17,116 +17,116 @@
       "Preseason forecast, pro-rated": 9.271199587014218,
       "Current pace": 9.170076617970025,
       "Blend of pace and preseason": 8.045870144655808,
-      "Rest-of-season model": 7.643836222742747
+      "Rest-of-season model": 7.541516300878832
     },
     "first third of season": {
       "n": 4744,
       "Preseason forecast, pro-rated": 13.643348342752638,
       "Current pace": 14.467011365525154,
       "Blend of pace and preseason": 12.083459507120557,
-      "Rest-of-season model": 11.864097603519893
+      "Rest-of-season model": 11.692663133539146
     },
     "middle third": {
       "n": 3735,
       "Preseason forecast, pro-rated": 9.191107010052262,
       "Current pace": 8.457855602785395,
       "Blend of pace and preseason": 7.775027530606022,
-      "Rest-of-season model": 7.394866956494438
+      "Rest-of-season model": 7.302397772354345
     },
     "last third": {
       "n": 3897,
       "Preseason forecast, pro-rated": 4.025541921561264,
       "Current pace": 3.404484380175067,
       "Blend of pace and preseason": 3.3903077191857456,
-      "Rest-of-season model": 2.7449345596764516
+      "Rest-of-season model": 2.717309765056
     },
     "currently out (5+ games)": {
       "n": 1730,
       "Preseason forecast, pro-rated": 10.172706879660353,
       "Current pace": 7.555774103350102,
       "Blend of pace and preseason": 7.643762292850602,
-      "Rest-of-season model": 6.637556828881635
+      "Rest-of-season model": 6.536964290458402
     }
   },
   "range_adjustments": [
-    3.8406877651483475e-10,
-    0.00219598337913929,
-    0.006302219158538347
+    0.010934235912771074,
+    0.00031235507570067376,
+    0.0053690591507525864
   ],
   "range_calibration": {
     "all": {
       "n": 12376,
-      "coverage": 0.8135908209437621,
-      "avg_width": 24.25778559544486
+      "coverage": 0.8029250161603103,
+      "avg_width": 23.9857556006282
     },
     "first third": {
       "n": 4744,
-      "coverage": 0.8098650927487352,
-      "avg_width": 38.54802201061875
+      "coverage": 0.825885328836425,
+      "avg_width": 38.44994038948242
     },
     "middle third": {
       "n": 3735,
-      "coverage": 0.8099062918340026,
-      "avg_width": 22.247653934121974
+      "coverage": 0.766532797858099,
+      "avg_width": 21.577072357049996
     },
     "last third": {
       "n": 3897,
-      "coverage": 0.8216576853990248,
-      "avg_width": 8.788183388992726
+      "coverage": 0.8098537336412626,
+      "avg_width": 8.686381537615649
     },
     "currently out (5+ games)": {
       "n": 1730,
-      "coverage": 0.8560693641618498,
-      "avg_width": 20.66065972931202
+      "coverage": 0.8369942196531792,
+      "avg_width": 20.593652522345145
     },
     "hasn't played yet": {
       "n": 1933,
-      "coverage": 0.8173823072943611,
-      "avg_width": 39.472056607439434
+      "coverage": 0.8297982410760476,
+      "avg_width": 38.67163438099006
     }
   },
   "tiers": {
     "all": {
       "n": 12376,
-      "safe_share": 0.41047188106011634,
-      "risky_share": 0.2978345184227537,
-      "safe_under_cutoff": 0.025,
-      "risky_under_cutoff": 0.5515463917525774
+      "safe_share": 0.4054621848739496,
+      "risky_share": 0.30187459599224303,
+      "safe_under_cutoff": 0.023714627341570347,
+      "risky_under_cutoff": 0.5447002141327623
     },
     "rotation role": {
       "n": 7943,
-      "safe_share": 0.5477779176633514,
-      "risky_share": 0.1558605061060053,
-      "safe_under_cutoff": 0.02574120891749023,
-      "risky_under_cutoff": 0.4305331179321486
+      "safe_share": 0.5411053758025934,
+      "risky_share": 0.15900793151202317,
+      "safe_under_cutoff": 0.02419730107026524,
+      "risky_under_cutoff": 0.4220110847189232
     },
     "rotation role, first third": {
       "n": 3044,
-      "safe_share": 0.3899474375821288,
-      "risky_share": 0.22174770039421812,
-      "safe_under_cutoff": 0.06318449873631002,
-      "risky_under_cutoff": 0.26814814814814814
+      "safe_share": 0.3708935611038108,
+      "risky_share": 0.23127463863337713,
+      "safe_under_cutoff": 0.05845881310894597,
+      "risky_under_cutoff": 0.2585227272727273
     },
     "rotation role, middle third": {
       "n": 2397,
-      "safe_share": 0.5878181059657905,
-      "risky_share": 0.1347517730496454,
-      "safe_under_cutoff": 0.0241305890702626,
-      "risky_under_cutoff": 0.5356037151702786
+      "safe_share": 0.5903212348769294,
+      "risky_share": 0.13308302044221945,
+      "safe_under_cutoff": 0.024734982332155476,
+      "risky_under_cutoff": 0.5391849529780565
     },
     "rotation role, last third": {
       "n": 2502,
-      "safe_share": 0.7014388489208633,
+      "safe_share": 0.701039168665068,
       "risky_share": 0.09592326139088729,
-      "safe_under_cutoff": 0.0017094017094017094,
+      "safe_under_cutoff": 0.0017103762827822121,
       "risky_under_cutoff": 0.7458333333333333
     },
     "no rotation role": {
       "n": 4433,
-      "safe_share": 0.16444845477103542,
-      "risky_share": 0.5522219715768103,
-      "safe_under_cutoff": 0.0205761316872428,
-      "risky_under_cutoff": 0.6127450980392157
+      "safe_share": 0.16241822693435598,
+      "risky_share": 0.5578614933453643,
+      "safe_under_cutoff": 0.020833333333333332,
+      "risky_under_cutoff": 0.6073594824100284
     }
   }
 }

@@ -49,8 +49,9 @@ export default function About({ meta }: { meta: Meta }) {
 
       <Section title="Injury news">
         <p>
-          The model can't read injury news, so injuries come in three ways, each labeled on the player's page with its
-          sources. The NBA's official injury report is read every day; a player listed Out with a serious injury (a torn
+          The updated forecast's model sees who's listed on the NBA's official injury report (and how that changed over
+          the past week), but not how long an injury takes to heal. So recovery timelines come in three ways, each
+          labeled on the player's page with its sources. The injury report is read every day; a player listed Out with a serious injury (a torn
           ACL, an Achilles rupture, a labrum or meniscus tear, a foot fracture) gets an automatic return estimate based
           on how fast NBA players have come back from that injury in published studies. A timeline the team announces
           replaces that estimate, and a few cases are adjusted by hand when the news says more than the report.
@@ -145,7 +146,11 @@ export default function About({ meta }: { meta: Meta }) {
 
       <Section title="What it can't do">
         <ul className="list-disc space-y-2 pl-5">
-          <li>It can't see injury reports, so it can't tell an injury from rest, a benching, a suspension or an unsigned season.</li>
+          <li>
+            The preseason forecast can't see injury news, and the updated forecast only knows recovery times for a few
+            serious injuries; for players not on the injury report, it can't tell an injury from rest, a benching or a
+            suspension.
+          </li>
           <li>Forecasts assume the player is in the league; players not on a roster who haven't played get no updated forecast.</li>
           <li>The edge over simple guessing is real but modest. Much of availability is unpredictable without injury data.</li>
         </ul>

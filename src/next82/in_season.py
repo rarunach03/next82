@@ -11,7 +11,10 @@ seasons compare fairly), weighted by games remaining so the training loss matche
 the error in games that we report.
 
 The same function, `snapshot_features`, builds features for past snapshots and for
-today's forecast, so training and the live site can't drift apart.
+today's forecast, so training and the live site can't drift apart. Injury-report
+features (injury_history.py; 2019-20 on) are added the same way: from past reports
+for snapshots, from this season's report log for today. They were kept after rolling
+validation (injury_features.py).
 
 Usage:
     python -m next82.in_season     # build snapshots, validate, test, train, save the model
@@ -22,10 +25,12 @@ import lightgbm as lgb
 import numpy as np
 import pandas as pd
 
-from next82 import config, data, evaluate, intervals, models
+from next82 import config, data, evaluate, injuries, injury_history, intervals, models
 from next82.features import FEATURES, load_table
 
 MODEL_PATH = config.MODELS_DIR / "in_season.txt"
+# The same model without injury features, for rookies (with them, rookie validation got worse).
+NO_INJURY_MODEL_PATH = config.MODELS_DIR / "in_season_no_injury.txt"
 # Low and high ends of the likely range (10th and 90th percentiles).
 RANGE_MODEL_PATHS = (config.MODELS_DIR / "in_season_low.txt", config.MODELS_DIR / "in_season_high.txt")
 METRICS_PATH = config.MODELS_DIR / "in_season_metrics.json"
@@ -52,7 +57,8 @@ SO_FAR_FEATURES = [
     "days_since_last_game",
     "played_last10_share",
 ]
-IN_SEASON_FEATURES = SO_FAR_FEATURES + ["preseason_share"] + FEATURES
+BASE_FEATURES = SO_FAR_FEATURES + ["preseason_share"] + FEATURES
+IN_SEASON_FEATURES = BASE_FEATURES + injury_history.INJURY_FEATURES
 
 
 def to_date(values: pd.Series) -> pd.Series:
@@ -193,7 +199,7 @@ def build_snapshots() -> pd.DataFrame:
             parts.append(snap[snap.team_games_left > 0])
     snaps = pd.concat(parts, ignore_index=True)
     snaps["target"] = (snaps.games_after / snaps.team_games_left).clip(upper=1)
-    return snaps
+    return injury_history.add_to_snapshots(snaps)
 
 
 def model(**params) -> lgb.LGBMRegressor:
@@ -311,13 +317,19 @@ def evaluate_methods(train: pd.DataFrame, test: pd.DataFrame, k: float, **params
 
 
 def tune(snaps: pd.DataFrame) -> tuple[float, dict]:
-    """Choose the blend baseline's k and the model settings on the validation season."""
+    """Choose the blend baseline's k and the model settings on the validation season.
+
+    Settings are chosen without the injury features: that's the configuration the
+    decision to add them was validated on (injury_features.py), and re-tuning with them
+    gave ranges far wider than they need to be.
+    """
     train = snaps[snaps.SEASON < VALIDATION_SEASON]
     val = snaps[snaps.SEASON == VALIDATION_SEASON]
     best_k = min([5, 10, 20, 40], key=lambda k: np.abs(baseline_blend(val, k) - val.games_after).mean())
     grid = [dict(num_leaves=nl, min_child_samples=mc, n_estimators=ne)
             for nl in (15, 31) for mc in (100, 300) for ne in (300, 600)]
-    scores = [(np.abs(predict_rest(fit(train, **g), val) - val.games_after).mean(), i) for i, g in enumerate(grid)]
+    scores = [(np.abs(predict_rest(fit(train, BASE_FEATURES, **g), val, BASE_FEATURES) - val.games_after).mean(), i)
+              for i, g in enumerate(grid)]
     best = grid[min(scores)[1]]
     print(f"Validation {VALIDATION_SEASON}: blend k={best_k}, model {best} "
           f"(MAE {min(scores)[0]:.2f} games; grid {min(s for s, _ in scores):.2f}-{max(s for s, _ in scores):.2f})")
@@ -329,6 +341,13 @@ def print_scorecard(card: dict):
     print(f"{'Group':32s} {'n':>7s} " + " ".join(f"{m[:22]:>23s}" for m in methods))
     for group, row in card.items():
         print(f"{group:32s} {row['n']:7d} " + " ".join(f"{row[m]:23.2f}" for m in methods))
+
+
+def with_current_injury_features(snap: pd.DataFrame, date: pd.Timestamp) -> pd.DataFrame:
+    """Today's snapshot plus injury features from this season's report log (0 if not listed)."""
+    snap = snap.join(injury_history.current_features(injuries.saved_log(), date), on="PLAYER_ID")
+    snap[injury_history.INJURY_FEATURES] = snap[injury_history.INJURY_FEATURES].fillna(0)
+    return snap
 
 
 def predict_current(models_dir=config.MODELS_DIR) -> pd.DataFrame | None:
@@ -356,6 +375,7 @@ def predict_current(models_dir=config.MODELS_DIR) -> pd.DataFrame | None:
     date = team_games.GAME_DATE.max() + pd.Timedelta(days=1) if len(team_games) else pd.Timestamp.today().normalize()
     roster_teams = teams.set_index("PLAYER_ID").TEAM_ID if teams is not None else None
     snap = snapshot_features(player_games, team_games, totals, players, date, known_teams=roster_teams)
+    snap = with_current_injury_features(snap, date)
     booster = lgb.Booster(model_file=str(path))
     snap["predicted_rest"] = np.clip(booster.predict(snap[IN_SEASON_FEATURES]), 0, 1) * snap.team_games_left
     snap["updated_total"] = snap.played_so_far + snap.predicted_rest
@@ -406,6 +426,7 @@ def main():
     final = fit(snaps, **params)
     config.MODELS_DIR.mkdir(exist_ok=True)
     final.booster_.save_model(str(MODEL_PATH))
+    fit(snaps, BASE_FEATURES, **params).booster_.save_model(str(NO_INJURY_MODEL_PATH))
     for m, path in zip(fit_range(snaps, **params), RANGE_MODEL_PATHS):
         m.booster_.save_model(str(path))
     METRICS_PATH.write_text(json.dumps({

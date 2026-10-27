@@ -118,8 +118,11 @@ season-ending).
 1. **Automatic, from the NBA's official injury report** (`next82.injuries`, `next82.auto_overrides`).
    The refresh reads the latest report once a day and stores only the parsed facts (player, status,
    reason, body part, injury type, report time and link), never the PDF. A player listed Out with a
-   serious type in `data/recovery_table.csv` gets an estimated return: last game played + the fast end
-   of real NBA recoveries for that injury, with no latest return if it can be season-ending. Short-term
+   serious type in `data/recovery_table.csv` gets an estimated return: injury start + the fast end of
+   real NBA recoveries for that injury, with no latest return if it can be season-ending. The injury
+   start is the later of his last game and his first listing with this injury, unless he was already
+   listed Out with an injury on the last regular-season day or on his team's last playoff game day;
+   then it's his last game, playoffs included. Short-term
    statuses (illness, rest, soreness, sprains, strains) are left to the model. Reports only list teams
    about to play, so each player's status is his team's most recent listing; the override clears when
    that listing drops him or he plays again. Unclassified reasons and unmatched names are logged.
@@ -166,11 +169,18 @@ study reports it, otherwise 80% of the average), and whether it can be season-en
   (weight 3), and their games come from the updated-forecast model.
 - **Accuracy** (`accuracy.py`): each player's games so far against what their forecast implied for
   that many team games, with a resampled 95% range for the gap to the best simple guess.
-- **Injury features in the model** (`injury_features.py`, tested, not used): past official injury
-  reports (2019-20 on, published before each snapshot date) gave features like "listed Out", status
-  trend and "serious injury type". They made validation slightly worse (7.122 -> 7.160 games on
-  2023-24) while improving the test seasons (7.644 -> 7.542), so by the validation rule the model
-  doesn't use them; injury news reaches the forecast through the adjustments instead.
+- **Injury features in the model** (`injury_history.py`, `injury_features.py`): from official injury
+  reports published before each snapshot date (2019-20 on; missing before): listed Out, status level,
+  serious injury type, Out a week earlier, status trend, rough days listed. Today's values come from
+  this season's report log. Decided by rolling validation, each season trained only on earlier ones:
+  average over 2021-22, 2022-23 and 2023-24, MAE 7.065 -> 7.047 games; for players listed Out whose
+  absence streak is under 3 games (what the features are for) 7.767 -> 7.724; coverage 80% -> 79%.
+  Kept. The test seasons, scored once after deciding: 7.644 -> 7.542, coverage 81% -> 80% (the
+  listed-Out group was slightly worse there, 8.316 -> 8.357). The model settings are still chosen
+  without these features (re-tuning with them made the ranges much wider than needed). The features
+  also cut the old model's over-forecast for healthy players early in recent seasons. Rookies use the
+  model without them (`models/in_season_no_injury.txt`): with them, rookie validation got worse
+  (5.79 -> 6.17 games).
 - **Back-to-backs** (`back_to_back.py`): a player "rested" when he missed the second night but played
   the next game; rates from the last three seasons, pulled toward the league average (9.8%) as if the
   league rate were 40 extra back-to-backs. Shown on the site; not added to the forecast, because it
@@ -206,8 +216,10 @@ tests/             pytest; tests needing the full downloaded data skip themselve
 
 ## Limitations
 
-- The model itself doesn't see injury types; injury news enters through the adjustments above, and
-  only for injuries with a cited recovery study (others are logged and left to the model).
+- The model sees injury-report status (listed Out, serious injury type, trend) but not recovery
+  timelines; those enter through the adjustments above, and only for injuries with a cited recovery
+  study (others are logged and left to the model). This season's report log starts on Oct 26, 2026,
+  so the week-earlier features fill in from Nov 3.
 - Injury start dates are estimated from the last game played, so a preseason injury can look older
   than it is (a still-out player past the typical recovery is treated as "back any day").
 - Forecasts assume the player is in the league. Players not on a roster who haven't played get

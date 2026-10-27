@@ -1,4 +1,4 @@
-"""Past NBA injury reports, for injury features in the in-season model.
+"""NBA injury reports, for injury features in the in-season (rest-of-season) model.
 
 For each snapshot date we use only reports published before it (the 5 PM report of
 the three days before, and of days 8-10 before for the trend). Reports only list
@@ -95,6 +95,31 @@ def snapshot_features(season: str, date: pd.Timestamp, players: pd.DataFrame | N
 
 def serious_types() -> set:
     return set(load_recovery().injury_type)
+
+
+def add_to_snapshots(snaps: pd.DataFrame) -> pd.DataFrame:
+    """Past snapshots with injury features (missing before 2019-20, when no reports exist)."""
+    serious = serious_types()
+    parts = []
+    for (season, date), rows in snaps.drop(columns=INJURY_FEATURES, errors="ignore").groupby(["SEASON", "date"]):
+        rows = rows.copy()
+        if season >= FIRST_SEASON:
+            rows = rows.join(snapshot_features(season, pd.Timestamp(date), None, serious), on="PLAYER_ID")
+            rows[INJURY_FEATURES] = rows[INJURY_FEATURES].fillna(0)
+        else:
+            rows[INJURY_FEATURES] = np.nan
+        parts.append(rows)
+    return pd.concat(parts).sort_index()
+
+
+def current_features(log: pd.DataFrame | None, date: pd.Timestamp) -> pd.DataFrame:
+    """Injury features as of the start of `date` from this season's saved report log
+    (one report per day), so only reports from before `date` count."""
+    if log is None or log.empty:
+        return pd.DataFrame(columns=INJURY_FEATURES, index=pd.Index([], name="PLAYER_ID"))
+    log = log.assign(report_day=pd.to_datetime(log.report_day))
+    return snapshot_features(config.FORECAST_SEASON, pd.Timestamp(date), None, serious_types(),
+                             reports_for=lambda day: log[log.report_day == day])
 
 
 def main():
