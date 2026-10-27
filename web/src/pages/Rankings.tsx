@@ -172,7 +172,7 @@ export default function Rankings({ meta, teams }: { meta: Meta; teams: Team[] })
               {header('value', view === 'ros' ? 'Rest-of-season value' : 'Season value')}
               {header('change', 'Rank change', 'hidden md:table-cell')}
               {header('discount', 'Durability discount', 'hidden lg:table-cell')}
-              <th className="hidden py-3 pr-4 font-medium uppercase xl:table-cell" title="Share of back-to-back second nights the player sits, and his team's back-to-backs left">
+              <th className="hidden py-3 pr-4 font-medium uppercase xl:table-cell" title="Share of back-to-back second nights the player sits, and the team's back-to-backs left">
                 B2B rest
               </th>
             </tr>
@@ -272,7 +272,7 @@ export default function Rankings({ meta, teams }: { meta: Meta; teams: Team[] })
         </p>
         <p>
           B2B rest: how often the player sits the second night of a back-to-back (from the last three seasons, pulled
-          toward the league average), and how many his team has left. The forecasts already reflect typical resting. ESPN
+          toward the league average), and how many the team has left. The forecasts already reflect typical resting. ESPN
           and Yahoo use each site's default points scoring. 9-cat values are z-scores per game against the top{' '}
           {fantasy.poolSize} players (12 teams × 13), with FG% and FT% weighted by attempts.
         </p>

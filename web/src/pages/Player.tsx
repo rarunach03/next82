@@ -140,8 +140,8 @@ export default function Player({ meta }: { meta: Meta }) {
 
       {p.b2bLeft !== null && p.b2bRate !== null && meta.b2bLeagueRate !== null && (
         <p className="mt-4 text-sm text-muted">
-          <span className="text-ink">Back-to-backs:</span> {p.team ?? 'His team'} has {p.b2bLeft} left. He sits the second
-          night about {Math.round(p.b2bRate * 100)}% of the time (league average {Math.round(meta.b2bLeagueRate * 100)}%),
+          <span className="text-ink">Back-to-backs:</span> {p.team ?? 'The team'} has {p.b2bLeft} left. {p.name} sits the
+          second night about {Math.round(p.b2bRate * 100)}% of the time (league average {Math.round(meta.b2bLeagueRate * 100)}%),
           {' '}roughly {Math.max(0, Math.round(p.b2bRate * p.b2bLeft))} game{Math.round(p.b2bRate * p.b2bLeft) === 1 ? '' : 's'}.
           {' '}<span className="text-faint">The updated forecast already reflects typical resting.</span>
         </p>
