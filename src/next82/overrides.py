@@ -27,7 +27,8 @@ COLUMNS = ["player_id", "player_name", "status", "earliest_return", "latest_retu
            "source_url", "source_url_2", "date_added", "review_by"]
 DATE_COLUMNS = ["earliest_return", "latest_return", "date_added", "review_by"]
 OUTPUT = ["override_status", "override_note", "override_source", "override_source_2", "override_added",
-          "override_review_by", "override_earliest", "override_latest", "override_indefinite", "override_estimated"]
+          "override_review_by", "override_earliest", "override_latest", "override_indefinite", "override_estimated",
+          "override_kind"]
 
 
 def load(path=None) -> pd.DataFrame:
@@ -114,5 +115,5 @@ def apply(forecasts: pd.DataFrame, overrides: pd.DataFrame, schedule: pd.DataFra
             point, point - played, float(low), float(high)]
         out.loc[i, OUTPUT] = [o.status, o.note, o.source_url, o.source_url_2, o.date_added, o.review_by,
                               earliest if not indefinite else None, latest, indefinite,
-                              bool(o.estimated) and not indefinite]
+                              bool(o.estimated) and not indefinite, getattr(o, "kind", "manual")]
     return out

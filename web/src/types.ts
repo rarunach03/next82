@@ -41,6 +41,8 @@ export type Tier = 'Safe' | 'Moderate' | 'Risky'
 
 /** A manual injury adjustment to the updated forecast (data/overrides.csv). */
 export interface Override {
+  /** manual: data/overrides.csv; automatic: the NBA injury report + recovery table; news: a team timeline. */
+  kind: 'manual' | 'automatic' | 'news'
   status: string
   note: string
   sourceUrl: string

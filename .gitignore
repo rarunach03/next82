@@ -21,6 +21,9 @@ models/*
 !data/processed/fantasy_prior_*.parquet
 !models/fantasy_metrics.json
 !data/processed/rookie_baseline_*.parquet
+!data/processed/last_game_before_*.parquet
+!data/processed/b2b_rates_*.parquet
+!models/b2b_metrics.json
 !models/rookie_metrics.json
 !models/in_season*.txt
 !models/in_season_metrics.json

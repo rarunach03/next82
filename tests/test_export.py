@@ -116,5 +116,7 @@ def test_overrides_flag_when_past_review_date(tmp_path, monkeypatch):
     monkeypatch.setattr(ex, "OUT_DIR", tmp_path / "out")
     ex.main()
     players = json.loads((tmp_path / "out" / "index.json").read_text())["players"]
-    flagged = [p for p in players if p["override"]]
-    assert flagged and all(p["override"]["needsReview"] for p in flagged)
+    manual = [p for p in players if p["override"] and p["override"]["kind"] == "manual"]
+    assert manual and all(p["override"]["needsReview"] for p in manual)
+    # Automatic overrides have no review date: they clear on their own.
+    assert not any(p["override"]["needsReview"] for p in players if p["override"] and p["override"]["kind"] != "manual")

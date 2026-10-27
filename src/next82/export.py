@@ -16,7 +16,7 @@ from datetime import datetime
 import numpy as np
 import pandas as pd
 
-from next82 import accuracy, back_to_back, config, data, evaluate, fantasy, in_season, overrides, rookies
+from next82 import accuracy, auto_overrides, back_to_back, config, data, evaluate, fantasy, in_season, overrides, rookies
 from next82.intervals import tier
 from next82.explain import GAMES, similar_comebacks, top_factors
 from next82.preseason import load_forecasts, load_ranges
@@ -87,6 +87,8 @@ def override_json(r) -> dict | None:
     return {
         "status": r.override_status,
         "note": r.override_note,
+        # manual (data/overrides.csv), automatic (injury report + recovery table) or news (team timeline)
+        "kind": r.override_kind if isinstance(r.override_kind, str) else "manual",
         "sourceUrl": r.override_source,
         "sourceUrl2": r.override_source_2 if isinstance(r.override_source_2, str) else None,
         "estimated": bool(r.override_estimated),
@@ -96,7 +98,7 @@ def override_json(r) -> dict | None:
         "latestReturn": day(r.override_latest),
         "indefinite": bool(r.override_indefinite),
         # Past its review-by date: the site flags it so it can't be missed.
-        "needsReview": bool(r.override_review_by is not None and pd.notna(r.override_review_by)
+        "needsReview": bool(r.override_kind == "manual" and r.override_review_by is not None and pd.notna(r.override_review_by)
                             and pd.Timestamp(r.override_review_by) < pd.Timestamp.today().normalize()),
     }
 
@@ -291,7 +293,12 @@ def main():
     for o in overrides.overdue(manual, pd.Timestamp.today().normalize()).itertuples():
         print(f"WARNING: override for {o.player_name} is past its review-by date ({o.review_by.date()}); update data/overrides.csv")
     team_ids = rosters.set_index("PLAYER_ID").TEAM_ID if rosters is not None else pd.Series(dtype=float)
-    forecasts = overrides.apply(forecasts, manual, data.saved_schedule(), today, team_ids)
+    # Automatic overrides from the injury report (and team timelines from news); manual rows win.
+    automatic, auto_log = auto_overrides.current(manual, today)
+    for line in auto_log:
+        print(line)
+    combined = pd.concat([manual.assign(kind="manual"), automatic], ignore_index=True) if len(automatic) else manual.assign(kind="manual")
+    forecasts = overrides.apply(forecasts, combined, data.saved_schedule(), today, team_ids)
 
     # Back-to-backs: each team's remaining second nights and each player's rest rate.
     # Shown on the site; not added to the forecast (it didn't improve validation).
