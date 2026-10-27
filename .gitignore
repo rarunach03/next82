@@ -17,6 +17,9 @@ models/*
 !data/processed/forecasts.parquet
 !data/processed/history.parquet
 !data/processed/past_comebacks.parquet
+!data/processed/preseason_*.parquet
+!models/in_season*.txt
+!models/in_season_metrics.json
 !models/metrics.json
 !data/raw/current_rosters/
 data/raw/current_rosters/*

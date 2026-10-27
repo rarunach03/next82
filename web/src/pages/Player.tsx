@@ -37,40 +37,54 @@ export default function Player({ meta }: { meta: Meta }) {
         </p>
       </header>
 
-      <section className={`mt-8 grid gap-px overflow-hidden rounded-2xl border border-line bg-line ${soFar ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
+      <section className={`mt-8 grid gap-px overflow-hidden rounded-2xl border border-line bg-line sm:grid-cols-2 ${p.comeback ? 'lg:grid-cols-4' : 'lg:grid-cols-3'}`}>
         {p.comeback ? (
           <>
-            <BigStat value={Math.round(p.ifHealthy ?? 0)} unit="games" label={`${meta.forecastSeason} forecast if healthy`} accent />
             <BigStat
-              value={Math.round((p.setbackChance ?? 0) * 100)}
-              unit="%"
-              label={`Chance of a setback (fewer than ${meta.setbackGames} games)`}
-            />
-          </>
-        ) : (
-          <>
-            <BigStat
-              value={Math.round(p.forecast)}
+              value={Math.round(p.ifHealthy ?? 0)}
               unit="games"
-              label={`${meta.forecastSeason} forecast`}
-              note={`${change >= 0 ? '+' : '−'}${Math.abs(change)} vs. ${meta.dataThrough}`}
+              label="Preseason forecast, if healthy"
+              note="Made before the season · fixed"
               accent
             />
             <BigStat
-              value={p.games}
-              unit={`of ${p.seasonGames}`}
-              label={`Played in ${meta.dataThrough}`}
-              note={p.games > p.seasonGames ? 'traded mid-season' : undefined}
+              value={Math.round((p.setbackChance ?? 0) * 100)}
+              unit="%"
+              label={`Preseason chance of a setback (fewer than ${meta.setbackGames} games)`}
             />
           </>
+        ) : (
+          <BigStat
+            value={Math.round(p.forecast)}
+            unit="games"
+            label="Preseason forecast"
+            note={`Made before the season · fixed · ${change >= 0 ? '+' : '−'}${Math.abs(change)} vs. ${meta.dataThrough}`}
+            accent
+          />
         )}
-        {soFar && (
+        {p.updated !== null && (
+          <BigStat
+            value={Math.round(p.updated)}
+            unit="games"
+            label="Updated forecast"
+            note={`${p.playedSoFar ?? 0} played + ${Math.round(p.updatedRest ?? 0)} more of ${p.gamesLeft} left${
+              meta.updatedAsOf ? ` · as of ${shortDate(meta.updatedAsOf)}` : ''
+            }`}
+          />
+        )}
+        {soFar ? (
           <BigStat
             value={p.playedSoFar ?? 0}
             unit={`of ${p.teamGamesSoFar}`}
             label={`Played so far in ${meta.forecastSeason}`}
-            note={meta.soFarThrough ? `Through ${shortDate(meta.soFarThrough)}` : undefined}
+            note={
+              p.playedSoFar === 0
+                ? "Hasn't played yet this season"
+                : (streakNote(p.absenceStreak) ?? (meta.soFarThrough ? `Through ${shortDate(meta.soFarThrough)}` : undefined))
+            }
           />
+        ) : (
+          <BigStat value={p.games} unit={`of ${p.seasonGames}`} label={`Played in ${meta.dataThrough}`} />
         )}
       </section>
 
@@ -83,9 +97,16 @@ export default function Player({ meta }: { meta: Meta }) {
         </p>
       ) : (
         <p className="mt-4 text-sm text-faint">
-          Out of 82 games, made before the season started and kept fixed. Our average miss is{' '}
-          {meta.accuracy.modelMae} games, and half our forecasts land within{' '}
-          {Math.round(meta.accuracy.modelMedianError)} — treat it as a range, not an exact count.
+          The preseason forecast was made before the season started and stays fixed: its average miss is{' '}
+          {meta.accuracy.modelMae} games, and half land within {Math.round(meta.accuracy.modelMedianError)}. The updated
+          forecast adds games played so far to a fresh prediction for the games left, using every game up to{' '}
+          {meta.updatedAsOf ? shortDate(meta.updatedAsOf) : 'now'}
+          {meta.accuracy.updatedMae !== undefined && (
+            <>
+              ; over the rest of a season it misses by {meta.accuracy.updatedMae} games on average
+            </>
+          )}
+          .
         </p>
       )}
 
@@ -147,6 +168,12 @@ export default function Player({ meta }: { meta: Meta }) {
       </section>
     </article>
   )
+}
+
+/** "Hasn't played in his team's last 6 games" style note, only for real absences. */
+function streakNote(streak: number | null): string | undefined {
+  if (streak === null || streak < 2) return undefined
+  return `Out for the team's last ${streak} games`
 }
 
 function BigStat({ value, unit, label, note, accent = false }: { value: number; unit: string; label: string; note?: string; accent?: boolean }) {

@@ -48,3 +48,7 @@ ROTATION_MIN_GP_SHARE = 0.25
 # A "setback" season: playing fewer than this many games out of 82. Comeback
 # forecasts show the chance of a setback plus the expected games if healthy.
 SETBACK_GAMES = 20
+
+# Length of a normal regular season. Used for the season in progress, whose
+# schedule may still list some games as undecided (e.g. NBA Cup knockout games).
+REGULAR_SEASON_GAMES = 82

@@ -36,7 +36,8 @@ export default function Leaderboard({
             <th className="hidden py-3 pr-3 font-medium sm:table-cell">Age</th>
             <th className="hidden py-3 pr-3 font-medium md:table-cell">Played {dataThrough}</th>
             {seasonStarted && <th className="hidden py-3 pr-3 font-medium lg:table-cell">{forecastSeason} so far</th>}
-            <th className="py-3 pr-4 font-medium">Forecast</th>
+            <th className="py-3 pr-3 font-medium">Preseason</th>
+            {seasonStarted && <th className="hidden py-3 pr-4 font-medium sm:table-cell">Updated</th>}
           </tr>
         </thead>
         <tbody>
@@ -64,9 +65,21 @@ export default function Leaderboard({
               {seasonStarted && (
                 <td className="tabular hidden py-3 pr-3 text-muted lg:table-cell">{soFarText(p) ?? '—'}</td>
               )}
-              <td className="py-3 pr-4">
+              <td className="py-3 pr-3">
                 <ForecastCell player={p} />
               </td>
+              {seasonStarted && (
+                <td className="tabular hidden py-3 pr-4 sm:table-cell">
+                  {p.updated === null ? (
+                    <span className="text-faint">—</span>
+                  ) : (
+                    <>
+                      <span className="font-display text-lg font-bold">{Math.round(p.updated)}</span>
+                      <UpdatedChange player={p} />
+                    </>
+                  )}
+                </td>
+              )}
             </tr>
           ))}
         </tbody>
@@ -80,6 +93,18 @@ export default function Leaderboard({
         </button>
       )}
     </div>
+  )
+}
+
+/** Change from the preseason forecast (the comeback forecast counts its setback risk). */
+function UpdatedChange({ player: p }: { player: PlayerSummary }) {
+  if (p.updated === null) return null
+  const diff = Math.round(p.updated - p.forecast)
+  if (Math.abs(diff) < 2) return null
+  return (
+    <span className={`ml-1.5 text-xs ${diff > 0 ? 'text-up' : 'text-down'}`}>
+      {diff > 0 ? '▲' : '▼'} {Math.abs(diff)}
+    </span>
   )
 }
 

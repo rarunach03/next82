@@ -1,0 +1,51 @@
+{
+  "snapshot_days": 14,
+  "validation_season": "2023-24",
+  "test_seasons": [
+    "2024-25",
+    "2025-26"
+  ],
+  "blend_k": 20,
+  "params": {
+    "num_leaves": 31,
+    "min_child_samples": 300,
+    "n_estimators": 600
+  },
+  "test": {
+    "all": {
+      "n": 12376,
+      "Preseason forecast, pro-rated": 9.271199587014218,
+      "Current pace": 9.170076617970025,
+      "Blend of pace and preseason": 8.045870144655808,
+      "Rest-of-season model": 7.643836222742747
+    },
+    "first third of season": {
+      "n": 4744,
+      "Preseason forecast, pro-rated": 13.643348342752638,
+      "Current pace": 14.467011365525154,
+      "Blend of pace and preseason": 12.083459507120557,
+      "Rest-of-season model": 11.864097603519893
+    },
+    "middle third": {
+      "n": 3735,
+      "Preseason forecast, pro-rated": 9.191107010052262,
+      "Current pace": 8.457855602785395,
+      "Blend of pace and preseason": 7.775027530606022,
+      "Rest-of-season model": 7.394866956494438
+    },
+    "last third": {
+      "n": 3897,
+      "Preseason forecast, pro-rated": 4.025541921561264,
+      "Current pace": 3.404484380175067,
+      "Blend of pace and preseason": 3.3903077191857456,
+      "Rest-of-season model": 2.7449345596764516
+    },
+    "currently out (5+ games)": {
+      "n": 1730,
+      "Preseason forecast, pro-rated": 10.172706879660353,
+      "Current pace": 7.555774103350102,
+      "Blend of pace and preseason": 7.643762292850602,
+      "Rest-of-season model": 6.637556828881635
+    }
+  }
+}

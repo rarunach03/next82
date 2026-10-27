@@ -150,6 +150,27 @@ def season_to_date_paths(season: str = config.FORECAST_SEASON):
     return folder / f"players_{season}.parquet", folder / f"teams_{season}.parquet"
 
 
+def season_logs_paths(season: str = config.FORECAST_SEASON):
+    """Game-by-game logs of the season so far: player games and finished team games."""
+    folder = config.RAW_DIR / "current_season"
+    return folder / f"player_games_{season}.parquet", folder / f"team_games_{season}.parquet"
+
+
+def _write(df: pd.DataFrame, path):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".tmp")
+    df.to_parquet(tmp, index=False)
+    tmp.replace(path)
+
+
+def saved_season_logs(season: str = config.FORECAST_SEASON) -> tuple[pd.DataFrame, pd.DataFrame] | None:
+    """Saved game logs of the season so far, without calling the API. None if never fetched."""
+    paths = season_logs_paths(season)
+    if not all(p.exists() for p in paths):
+        return None
+    return tuple(pd.read_parquet(p) for p in paths)
+
+
 def fetch_season_to_date(season: str = config.FORECAST_SEASON) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Games played so far in the season being forecast: per player, and per team.
 
@@ -174,10 +195,20 @@ def fetch_season_to_date(season: str = config.FORECAST_SEASON) -> tuple[pd.DataF
         .assign(LAST_GAME=team_games.GAME_DATE.max() if len(team_games) else None, FETCHED_AT=fetched_at)
     )
     for df, path in zip((players, teams_so_far), season_to_date_paths(season)):
-        path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_suffix(".tmp")
-        df.to_parquet(tmp, index=False)
-        tmp.replace(path)
+        _write(df, path)
+
+    # Game-by-game logs for the rest-of-season forecast (absence streaks, recent games).
+    time.sleep(config.REQUEST_DELAY)
+    player_games = playergamelogs.PlayerGameLogs(
+        season_nullable=season, season_type_nullable=SEASON_TYPE, timeout=TIMEOUT
+    ).get_data_frames()[0]
+    box = ["MIN", "FGM", "FGA", "FG3M", "FTM", "FTA", "REB", "AST", "STL", "BLK", "TOV", "PTS"]
+    player_cols = ["PLAYER_ID", "TEAM_ID", "GAME_ID", "GAME_DATE", *box]
+    team_cols = ["TEAM_ID", "GAME_ID", "GAME_DATE"]
+    player_logs = player_games[player_cols] if len(player_games) else pd.DataFrame(columns=player_cols)
+    team_logs = team_games[team_cols] if len(team_games) else pd.DataFrame(columns=team_cols)
+    for df, path in zip((player_logs, team_logs), season_logs_paths(season)):
+        _write(df, path)
     return players, teams_so_far
 
 

@@ -15,9 +15,10 @@ from datetime import datetime
 
 import pandas as pd
 
-from next82 import config, data
+from next82 import config, data, in_season
 from next82.explain import GAMES, similar_comebacks, top_factors
-from next82.train import FORECASTS_PATH, HISTORY_PATH, METRICS_PATH, PAST_COMEBACKS_PATH
+from next82.preseason import load_forecasts
+from next82.train import HISTORY_PATH, METRICS_PATH, PAST_COMEBACKS_PATH
 
 OUT_DIR = config.ROOT / "web" / "public" / "data"
 
@@ -62,12 +63,26 @@ def player_history(history: pd.DataFrame, seasons: list[str], player_id: int) ->
     ]
 
 
+def in_season_accuracy() -> dict:
+    """Test-season accuracy of the rest-of-season model and its best baseline, if trained."""
+    if not in_season.METRICS_PATH.exists():
+        return {}
+    card = json.loads(in_season.METRICS_PATH.read_text())["test"]["all"]
+    baselines = {k: v for k, v in card.items() if k not in ("n", "Rest-of-season model")}
+    best = min(baselines, key=baselines.get)
+    return {
+        "updatedMae": round(card["Rest-of-season model"], 1),
+        "updatedBestBaseline": best,
+        "updatedBestBaselineMae": round(baselines[best], 1),
+    }
+
+
 def round_or_none(value, digits=1):
     return None if pd.isna(value) else round(float(value), digits)
 
 
 def main():
-    forecasts = pd.read_parquet(FORECASTS_PATH)
+    forecasts = load_forecasts()
     history = pd.read_parquet(HISTORY_PATH)
     past = pd.read_parquet(PAST_COMEBACKS_PATH)
     metrics = json.loads(METRICS_PATH.read_text())
@@ -106,6 +121,17 @@ def main():
         forecasts["team_games_so_far"] = None
         season_started, so_far_through = False, None
 
+    # Rest-of-season forecast: games so far + predicted games still to come.
+    updated = in_season.predict_current()
+    updated_as_of = None
+    if updated is not None:
+        updated_as_of = updated.as_of.iloc[0]
+        cols = ["PLAYER_ID", "updated_total", "predicted_rest", "team_games_left", "absence_streak", "has_played"]
+        forecasts = forecasts.merge(updated[cols], on="PLAYER_ID", how="left")
+    else:
+        for c in ["updated_total", "predicted_rest", "team_games_left", "absence_streak", "has_played"]:
+            forecasts[c] = None
+
     comeback = forecasts.missed_season == 1
     forecasts["shown"] = forecasts.games_if_healthy.where(comeback, forecasts.pred_games)
     # Search suggestions list the best-known players first: minutes in their last season played.
@@ -135,6 +161,11 @@ def main():
             "recentMinutes": round(float(r.recent_minutes)),
             "playedSoFar": None if pd.isna(r.played_so_far) else int(r.played_so_far),
             "teamGamesSoFar": None if pd.isna(r.team_games_so_far) else int(r.team_games_so_far),
+            "updated": round_or_none(r.updated_total),
+            "updatedRest": round_or_none(r.predicted_rest),
+            "gamesLeft": None if pd.isna(r.team_games_left) else int(r.team_games_left),
+            # Team games since the player's last game, once they've played this season.
+            "absenceStreak": int(r.absence_streak) if pd.notna(r.absence_streak) and r.has_played == 1 else None,
         }
         players.append(summary)
 
@@ -178,6 +209,7 @@ def main():
             "rostersAsOf": rosters.FETCHED_AT.iloc[0].isoformat() if rosters is not None else None,
             "seasonStarted": season_started,
             "soFarThrough": str(so_far_through)[:10] if so_far_through is not None else None,
+            "updatedAsOf": str(updated_as_of)[:10] if updated_as_of is not None else None,
             "generatedAt": datetime.now().isoformat(timespec="seconds"),
             "games": GAMES,
             "setbackGames": config.SETBACK_GAMES,
@@ -189,6 +221,7 @@ def main():
                 "bestBaselineMae": round(results[best_baseline]["mae_all"], 1),
                 "comebackHealthyMae": round(metrics["comeback"]["mae_healthy_two_part"], 1),
                 "testSeasons": metrics["test_seasons"],
+                **in_season_accuracy(),
             },
         },
         "teams": teams,

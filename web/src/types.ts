@@ -9,6 +9,10 @@ export interface Accuracy {
   bestBaselineMae: number
   comebackHealthyMae: number
   testSeasons: [string, string]
+  /** Rest-of-season model: average miss in rest-of-season games on test seasons. */
+  updatedMae?: number
+  updatedBestBaseline?: string
+  updatedBestBaselineMae?: number
 }
 
 export interface Meta {
@@ -21,6 +25,8 @@ export interface Meta {
   seasonStarted: boolean
   /** Date of the latest game counted in "so far" numbers. */
   soFarThrough: string | null
+  /** Date of the latest games used by the updated forecast. */
+  updatedAsOf: string | null
   generatedAt: string
   games: number
   setbackGames: number
@@ -57,6 +63,12 @@ export interface PlayerSummary {
   /** Games played so far this season, and the player's current team's games so far. */
   playedSoFar: number | null
   teamGamesSoFar: number | null
+  /** Updated forecast: games so far + predicted games still to come. */
+  updated: number | null
+  updatedRest: number | null
+  gamesLeft: number | null
+  /** Team games since the player's last game (null if they haven't played this season). */
+  absenceStreak: number | null
 }
 
 export interface Factor {

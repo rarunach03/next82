@@ -13,6 +13,7 @@ import streamlit as st
 from next82 import config
 from next82.explain import GAMES, similar_comebacks, top_factors
 from next82.data import refresh_rosters_in_background, saved_rosters
+from next82.preseason import load_forecasts
 from next82.train import FORECASTS_PATH, HISTORY_PATH, METRICS_PATH, PAST_COMEBACKS_PATH
 
 st.set_page_config(page_title="Next82", page_icon="🏀", layout="centered")
@@ -44,7 +45,7 @@ def load():
     """The app's data: small files written by `python -m next82.train` and committed to git."""
     if not all(path.exists() for path in APP_FILES):
         return None, None, None, None
-    forecasts = pd.read_parquet(FORECASTS_PATH)
+    forecasts = load_forecasts()
     # Comeback players are shown their if-healthy forecast plus a setback chance.
     forecasts["shown_games"] = forecasts.games_if_healthy.where(forecasts.missed_season == 1, forecasts.pred_games)
     forecasts = forecasts.sort_values("shown_games", ascending=False)
