@@ -68,6 +68,7 @@ python -m next82.data        # download raw data from nba_api (~6 min, skips fil
 python -m next82.features    # build data/processed/player_seasons.parquet
 python -m next82.train       # evaluate models, train final models, write the app files (~1 min)
 python -m next82.in_season   # rest-of-season model: snapshots, validation, test, models/in_season.txt (~2 min)
+python -m next82.fantasy     # fantasy prior (last 3 seasons) and the shrinkage choice
 python -m next82.export      # export JSON for the website
 ```
 

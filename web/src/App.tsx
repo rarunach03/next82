@@ -4,6 +4,7 @@ import SearchBox from './components/SearchBox'
 import { baselineText, latestFinishedSeason, shortDate, useIndex } from './data'
 import About from './pages/About'
 import Home from './pages/Home'
+import Rankings from './pages/Rankings'
 
 // The player page carries the chart library, so it loads only when first opened.
 const Player = lazy(() => import('./pages/Player'))
@@ -33,10 +34,16 @@ function Shell() {
           </Link>
           <nav className="ml-auto flex items-center gap-4">
             {index && pathname !== '/' && (
-              <div className="w-40 sm:w-64">
+              <div className="hidden w-64 sm:block">
                 <SearchBox players={index.players} size="compact" />
               </div>
             )}
+            <Link
+              to="/rankings"
+              className={`text-sm font-medium transition hover:text-ink ${pathname === '/rankings' ? 'text-ink' : 'text-muted'}`}
+            >
+              Rankings
+            </Link>
             <Link
               to="/about"
               className={`text-sm font-medium transition hover:text-ink ${pathname === '/about' ? 'text-ink' : 'text-muted'}`}
@@ -63,6 +70,7 @@ function Shell() {
                   </Suspense>
                 }
               />
+              <Route path="/rankings" element={<Rankings meta={index.meta} teams={index.teams} />} />
               <Route path="/about" element={<About meta={index.meta} />} />
               <Route path="*" element={<p className="py-16 text-muted">Page not found.</p>} />
             </Routes>

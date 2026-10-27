@@ -122,3 +122,31 @@ export interface Index {
   teams: Team[]
   players: PlayerSummary[]
 }
+
+// fantasy.json, written by `python -m next82.export`.
+export type FantasyFormat = 'espn' | 'yahoo' | 'cat9'
+
+export interface FantasyPlayer {
+  id: number
+  name: string
+  team: string | null
+  tier: Tier | null
+  playedSoFar: number | null
+  /** Team games left, and the games the updated forecast expects the player to play. */
+  gamesLeft: number
+  restGames: number
+  /** Updated forecast for the whole season (played so far + rest). */
+  seasonGames: number
+  /** Per-game value: ESPN and Yahoo points, and total 9-category z-score. */
+  perGame: Record<FantasyFormat, number>
+  cats: Record<string, number>
+  stats: Record<string, number | null>
+}
+
+export interface Fantasy {
+  season: string
+  /** This season's stats are blended with the prior as if the prior were this many games. */
+  shrinkGames: number
+  poolSize: number
+  players: FantasyPlayer[]
+}

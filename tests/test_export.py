@@ -71,3 +71,19 @@ def test_tiers_only_for_rotation_players_with_an_updated_forecast(out):
     tiered = [p for p in index["players"] if p["tier"] is not None]
     assert tiered
     assert all(p["rotationRole"] and p["updated"] is not None for p in tiered)
+
+
+def test_fantasy_file(out):
+    path = out / "fantasy.json"
+    if not path.exists():
+        pytest.skip("fantasy prior not built")
+    fantasy = json.loads(path.read_text())
+    index = json.loads((out / "index.json").read_text())
+    ranked = {p["id"] for p in fantasy["players"]}
+    by_id = {p["id"]: p for p in index["players"]}
+    # Ranked players all have an updated forecast; games line up with it.
+    for p in fantasy["players"]:
+        assert by_id[p["id"]]["updated"] is not None
+        assert 0 <= p["restGames"] <= p["gamesLeft"]
+    # Players with a preseason forecast but no updated one (unsigned, no games) aren't ranked.
+    assert not any(by_id[i]["updated"] is None for i in ranked)

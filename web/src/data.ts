@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { Index, PlayerDetail, PlayerSummary } from './types'
+import type { Fantasy, Index, PlayerDetail, PlayerSummary } from './types'
 
 /** Where the site is served from: "/" locally, "/next82/" on GitHub Pages. */
 const BASE = import.meta.env.BASE_URL
@@ -14,6 +14,20 @@ export function useIndex(): Index | null {
     indexPromise.then(setIndex)
   }, [])
   return index
+}
+
+let fantasyPromise: Promise<Fantasy | null> | null = null
+
+/** Fantasy values, fetched once. `undefined` while loading, `null` if not exported. */
+export function useFantasy(): Fantasy | null | undefined {
+  const [fantasy, setFantasy] = useState<Fantasy | null | undefined>(undefined)
+  useEffect(() => {
+    fantasyPromise ??= fetch(`${BASE}data/fantasy.json`)
+      .then((r) => (r.ok ? r.json() : null))
+      .catch(() => null)
+    fantasyPromise.then(setFantasy)
+  }, [])
+  return fantasy
 }
 
 /** One player's details. `undefined` while loading, `null` if not found. */

@@ -15,7 +15,7 @@ from datetime import datetime
 
 import pandas as pd
 
-from next82 import config, data, evaluate, in_season
+from next82 import config, data, evaluate, fantasy, in_season
 from next82.intervals import tier
 from next82.explain import GAMES, similar_comebacks, top_factors
 from next82.preseason import load_forecasts, load_ranges
@@ -76,6 +76,44 @@ def in_season_accuracy() -> dict:
         "updatedBestBaseline": best,
         "updatedBestBaselineMae": round(baselines[best], 1),
     }
+
+
+def write_fantasy(forecasts: pd.DataFrame, target: str):
+    """fantasy.json: per-game production and forecast games for ranked players.
+
+    Only players with an updated forecast (on a roster, or with games this season)
+    are ranked. Rookies have no forecast yet, so they don't appear. The site
+    multiplies per-game value by games and ranks in the browser.
+    """
+    ranked = forecasts[forecasts.updated_total.notna()]
+    values = fantasy.player_values(ranked)
+    if values.empty:
+        return
+    rows = ranked.set_index("PLAYER_ID").join(values, how="inner")
+    k = json.loads(fantasy.METRICS_PATH.read_text())["shrink_k"]
+    players = []
+    for pid, r in rows.iterrows():
+        players.append({
+            "id": int(pid),
+            "name": r.PLAYER_NAME,
+            "team": r.TEAM_ABBREVIATION_NOW if pd.notna(r.TEAM_ABBREVIATION_NOW) else None,
+            "tier": r.tier,
+            "playedSoFar": None if pd.isna(r.played_so_far) else int(r.played_so_far),
+            "gamesLeft": int(r.team_games_left),
+            "restGames": round(float(r.predicted_rest), 1),
+            "seasonGames": round(float(r.updated_total), 1),
+            "perGame": {"espn": round(float(r.espn), 2), "yahoo": round(float(r.yahoo), 2), "cat9": round(float(r.z_total), 2)},
+            "cats": {c: round(float(r[f"z_{c}"]), 2) for c in fantasy.CATEGORIES},
+            "stats": {s: round(float(r[s]), 1) for s in ["MIN", "PTS", "REB", "AST", "STL", "BLK", "FG3M", "TOV"]}
+            | {"FG%": round(float(r.FGM / r.FGA), 3) if r.FGA else None, "FT%": round(float(r.FTM / r.FTA), 3) if r.FTA else None},
+        })
+    write_json(OUT_DIR / "fantasy.json", {
+        "season": target,
+        "shrinkGames": k,
+        "poolSize": fantasy.POOL_SIZE,
+        "scoring": fantasy.POINTS,
+        "players": players,
+    })
 
 
 def current_rotation_role(player_ids: pd.Series) -> pd.Series:
@@ -234,6 +272,8 @@ def main():
             ] if is_comeback else [],
         }
         write_json(OUT_DIR / "players" / f"{int(r.PLAYER_ID)}.json", detail)
+
+    write_fantasy(forecasts, target)
 
     teams = []
     if rosters is not None:

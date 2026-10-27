@@ -18,6 +18,8 @@ models/*
 !data/processed/history.parquet
 !data/processed/past_comebacks.parquet
 !data/processed/preseason_*.parquet
+!data/processed/fantasy_prior_*.parquet
+!models/fantasy_metrics.json
 !models/in_season*.txt
 !models/in_season_metrics.json
 !models/metrics.json
