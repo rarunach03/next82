@@ -47,6 +47,21 @@ export default function About({ meta }: { meta: Meta }) {
         </p>
       </Section>
 
+      <Section title="Injury news">
+        <p>
+          The model can't read injury news, so injuries come in three ways, each labeled on the player's page with its
+          sources. The NBA's official injury report is read every day; a player listed Out with a serious injury (a torn
+          ACL, an Achilles rupture, a labrum or meniscus tear, a foot fracture) gets an automatic return estimate based
+          on how fast NBA players have come back from that injury in published studies. A timeline the team announces
+          replaces that estimate, and a few cases are adjusted by hand when the news says more than the report.
+        </p>
+        <p>
+          These adjustments change the updated forecast, fantasy values and tiers. They never change the preseason
+          forecast or the accuracy numbers, which stay model-only. Short-term things like illness, rest or a sprained
+          ankle are left to the model.
+        </p>
+      </Section>
+
       <Section title="Fantasy rankings">
         <p>
           A player's fantasy value is their per-game production times the games they're forecast to play. Per-game
@@ -61,6 +76,22 @@ export default function About({ meta }: { meta: Meta }) {
           show rest-of-season value by default, with full-season value as a second view, for ESPN points, Yahoo points
           and 9-category leagues. Rookies are ranked once they've played 5 games: their stats are blended with past
           rookies from the same draft range.
+        </p>
+      </Section>
+
+      <Section title="Fantasy tools">
+        <p>
+          <Link to="/trade" className="text-accent">
+            The trade analyzer
+          </Link>{' '}
+          compares the rest-of-season value of two sides of a trade, with likely ranges, and gives you a link to share
+          it.{' '}
+          <Link to="/stash" className="text-accent">
+            Who to stash
+          </Link>{' '}
+          lists players who are out now but worth holding, by their value after they return. Player pages and the
+          rankings also show how many back-to-backs each team has left and how often a player sits the second night
+          (from the player's last three seasons, pulled toward the league average because the samples are small).
         </p>
       </Section>
 

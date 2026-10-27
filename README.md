@@ -27,6 +27,16 @@ what drives each number, and turns it into fantasy basketball rankings.
   ranked once they've played 5 games.
 - **Accuracy page.** The frozen preseason forecast graded every day against games played so far,
   next to two simple guesses, with an honest "too early to tell" while the gap could be luck.
+- **Injury adjustments.** The NBA's official injury report is read daily. Players listed Out with a
+  serious injury (ACL, Achilles, labrum, meniscus, foot fracture) get an automatic return estimate
+  from cited recovery studies; team-announced timelines and manual adjustments override it. Each is
+  labeled on the site with its sources.
+- **Fantasy tools.** A trade analyzer (rest-of-season value of two sides, shareable by link), a
+  "who to stash" list of injured players worth holding, and back-to-back counts with each player's
+  chance of sitting the second night.
+
+Data from NBA.com. Unofficial, non-commercial student project, not affiliated with the NBA or its
+teams. No ads or paid features.
 
 ## How accurate is it?
 
@@ -67,6 +77,10 @@ python -m next82.preseason --freeze --freeze-ranges   # freeze them; once per se
 python -m next82.in_season     # updated-forecast model: snapshots, validation, test (~2 min)
 python -m next82.fantasy       # fantasy prior and how much to shrink this season's stats
 python -m next82.rookies       # rookie baseline by draft range, shrinkage and games method
+python -m next82.back_to_back  # back-to-back rest rates and their validation
+python -m next82.auto_overrides  # each player's last game before the season (for injury start dates)
+python -m next82.injury_history  # past injury reports for the model (downloaded once, cached)
+python -m next82.injury_features # do injury-report features improve the updated forecast?
 python -m next82.export        # write the website's data (web/public/data/)
 pytest                         # tests
 ```
@@ -78,9 +92,10 @@ until the pipeline is rerun, the site says newer data is available. Set
 
 ## Daily updates
 
-`scripts/refresh.sh` downloads current rosters, this season's game logs and the draft order,
-runs `python -m next82.export` (updated forecasts, ranges, tiers, fantasy values including
-rookies, accuracy), and commits and pushes if anything changed. Each push redeploys the site
+`scripts/refresh.sh` downloads current rosters, this season's game logs, the schedule, the draft
+order and the latest official injury report,
+runs `python -m next82.export` (updated forecasts, automatic injury adjustments, ranges, tiers,
+fantasy values including rookies, back-to-backs, the stash list and accuracy), and commits and pushes if anything changed. Each push redeploys the site
 through GitHub Actions (`.github/workflows/deploy-pages.yml`).
 
 The refresh runs on a home computer, not in the cloud: stats.nba.com doesn't respond to cloud
@@ -91,20 +106,44 @@ the repo (macOS doesn't let background jobs into the Desktop folder). Run it by 
 ./scripts/refresh.sh
 ```
 
-## Manual injury adjustments
+## Injury adjustments
 
-The model can't read injury news, so known long absences go in `data/overrides.csv`, one row per
-player: `player_id, player_name, status, earliest_return, latest_return, estimated, note,
-source_url, source_url_2, date_added, review_by` (return dates and the second source are optional;
-`estimated` = yes when the earliest return is our own estimate, not a team timeline). For those players the updated forecast
-becomes games played so far plus the model's predicted share of the team's games from the
-return window onward; the earliest return sets the high end of the range and the latest the
-low end; with no latest return the low end is 0 more games and the point is the middle of the
-range. With no return window the site shows "Out indefinitely", with a range starting at 0
-more games. Fantasy values and tiers use the adjusted forecast; the preseason forecast, the
-accuracy page and the model's test metrics never do. The site marks each adjustment with its
-note and source, and the refresh log warns when one is past its review-by date. Edit the CSV,
-commit and push; the next refresh picks it up (or run `python -m next82.export` to see it now).
+The updated forecast can't read injury news on its own, so three kinds of adjustment change it
+(fantasy values and tiers use them; the preseason forecast, the accuracy page and the model's test
+metrics never do). All use the same math: games played so far plus the model's share of the team's
+games from the return window onward; the earliest return sets the high end of the range and the
+latest return the low end (0 more games if there's no latest return, e.g. when it could be
+season-ending).
+
+1. **Automatic, from the NBA's official injury report** (`next82.injuries`, `next82.auto_overrides`).
+   The refresh reads the latest report once a day and stores only the parsed facts (player, status,
+   reason, body part, injury type, report time and link), never the PDF. A player listed Out with a
+   serious type in `data/recovery_table.csv` gets an estimated return: last game played + the fast end
+   of real NBA recoveries for that injury, with no latest return if it can be season-ending. Short-term
+   statuses (illness, rest, soreness, sprains, strains) are left to the model. Reports only list teams
+   about to play, so each player's status is his team's most recent listing; the override clears when
+   that listing drops him or he plays again. Unclassified reasons and unmatched names are logged.
+2. **Team timelines from news**: `data/news_timelines.csv` replaces the automatic estimate (it's no
+   longer an estimate). Format, one row per player:
+
+   | column | meaning |
+   |---|---|
+   | `player_id` | NBA player ID (as in the site's player URLs) |
+   | `earliest_return` | YYYY-MM-DD, earliest announced return (or the re-evaluation date) |
+   | `latest_return` | YYYY-MM-DD, optional |
+   | `note` | the announced timeline in plain words |
+   | `source_url` | link to the news story |
+   | `date_found` | YYYY-MM-DD the timeline was found |
+
+   It only applies while the player is listed Out on the report.
+3. **Manual**: `data/overrides.csv` always wins: `player_id, player_name, status, earliest_return,
+   latest_return, estimated, note, source_url, source_url_2, date_added, review_by` (return dates and
+   the second source optional; `estimated` = yes for our own estimate). Use it when the report is less
+   specific than the news. The site and the refresh log flag a manual row past its review-by date.
+
+**Recovery table** (`data/recovery_table.csv`): each serious injury type, the average NBA return from a
+cited study, the fast end used as the earliest return (average minus one standard deviation when the
+study reports it, otherwise 80% of the average), and whether it can be season-ending.
 
 ## How it works
 
@@ -127,6 +166,10 @@ commit and push; the next refresh picks it up (or run `python -m next82.export` 
   (weight 3), and their games come from the updated-forecast model.
 - **Accuracy** (`accuracy.py`): each player's games so far against what their forecast implied for
   that many team games, with a resampled 95% range for the gap to the best simple guess.
+- **Back-to-backs** (`back_to_back.py`): a player "rested" when he missed the second night but played
+  the next game; rates from the last three seasons, pulled toward the league average (9.8%) as if the
+  league rate were 40 extra back-to-backs. Shown on the site; not added to the forecast, because it
+  made validation slightly worse (7.122 -> 7.133 games).
 
 ## Layout
 
@@ -143,6 +186,10 @@ src/next82/
   fantasy.py       per-game production, scoring, value above replacement
   rookies.py       rookie baseline and rankings
   accuracy.py      grading the preseason forecast during the season
+  injuries.py      the NBA's official injury report: fetch, parse, classify, match
+  auto_overrides.py  automatic return estimates from the report and recovery table
+  injury_history.py  past injury reports for model features
+  back_to_back.py  back-to-back rest rates
   explain.py       SHAP factors with readable labels
   export.py        the website's data (the only way data reaches the site)
 web/               React site (Vite, TypeScript, Tailwind, Recharts); data in public/data/
@@ -154,18 +201,21 @@ tests/             pytest; tests needing the full downloaded data skip themselve
 
 ## Limitations
 
-- No injury reports: rest, benchings, suspensions and unsigned seasons all look like absences.
+- The model itself doesn't see injury types; injury news enters through the adjustments above, and
+  only for injuries with a cited recovery study (others are logged and left to the model).
+- Injury start dates are estimated from the last game played, so a preseason injury can look older
+  than it is (a still-out player past the typical recovery is treated as "back any day").
 - Forecasts assume the player is in the league. Players not on a roster who haven't played get
   no updated forecast.
 - The preseason edge over simple guessing is real but modest (15.6 vs 17.2 games).
 - Comeback forecasts can't see injury type or medical clearance.
 
-## Next up (on hold)
+## Next up
 
-- **Phase 5: injury type.** Research reliable sources for the official NBA injury report and
-  historical injury logs, and their terms of use, before building anything. Then use current
-  injury status in the updated forecast and test body-region and repeat-injury features, keeping
-  them only if validation error improves.
-- **Phase 6: fantasy tools.** A "who to stash" list (labeled "long absence" until injury data
-  lands), a trade analyzer comparing rest-of-season value, and back-to-back counts for players
-  often rested, with each player's rest rate shrunk toward the league average.
+- **A data-use agreement with the NBA.** NBA.com's terms limit its statistics to news reporting or
+  private, non-commercial use and require consent for a website built around a database; this
+  project proceeds as a non-commercial student project with attribution.
+- **More recovery studies** for injury types without an NBA-specific study (hand and wrist
+  fractures, concussions, plantar fascia, patellar tendon), so more injuries get automatic estimates.
+- **Filling `data/news_timelines.csv` automatically** from team announcements (the format is above).
+- **Grading the updated forecast** at the end of the season, alongside the preseason one.
