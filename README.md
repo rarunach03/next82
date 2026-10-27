@@ -166,6 +166,11 @@ study reports it, otherwise 80% of the average), and whether it can be season-en
   (weight 3), and their games come from the updated-forecast model.
 - **Accuracy** (`accuracy.py`): each player's games so far against what their forecast implied for
   that many team games, with a resampled 95% range for the gap to the best simple guess.
+- **Injury features in the model** (`injury_features.py`, tested, not used): past official injury
+  reports (2019-20 on, published before each snapshot date) gave features like "listed Out", status
+  trend and "serious injury type". They made validation slightly worse (7.122 -> 7.160 games on
+  2023-24) while improving the test seasons (7.644 -> 7.542), so by the validation rule the model
+  doesn't use them; injury news reaches the forecast through the adjustments instead.
 - **Back-to-backs** (`back_to_back.py`): a player "rested" when he missed the second night but played
   the next game; rates from the last three seasons, pulled toward the league average (9.8%) as if the
   league rate were 40 extra back-to-backs. Shown on the site; not added to the forecast, because it

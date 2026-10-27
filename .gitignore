@@ -25,6 +25,7 @@ models/*
 !data/processed/injuries_end_of_season_before_*.parquet
 !data/processed/b2b_rates_*.parquet
 !models/b2b_metrics.json
+!models/injury_features_metrics.json
 !models/rookie_metrics.json
 !models/in_season*.txt
 !models/in_season_metrics.json

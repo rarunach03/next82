@@ -204,13 +204,14 @@ def model(**params) -> lgb.LGBMRegressor:
     return lgb.LGBMRegressor(**(settings | params))
 
 
-def fit(snaps: pd.DataFrame, **params) -> lgb.LGBMRegressor:
-    return model(**params).fit(snaps[IN_SEASON_FEATURES], snaps.target, sample_weight=snaps.team_games_left)
+def fit(snaps: pd.DataFrame, features: list[str] | None = None, **params) -> lgb.LGBMRegressor:
+    features = features or IN_SEASON_FEATURES
+    return model(**params).fit(snaps[features], snaps.target, sample_weight=snaps.team_games_left)
 
 
-def predict_rest(booster_or_model, snaps: pd.DataFrame) -> np.ndarray:
+def predict_rest(booster_or_model, snaps: pd.DataFrame, features: list[str] | None = None) -> np.ndarray:
     """Predicted games still to come."""
-    share = np.clip(booster_or_model.predict(snaps[IN_SEASON_FEATURES]), 0, 1)
+    share = np.clip(booster_or_model.predict(snaps[features or IN_SEASON_FEATURES]), 0, 1)
     return share * snaps.team_games_left.to_numpy()
 
 
@@ -222,32 +223,34 @@ def season_third(progress) -> np.ndarray:
     return np.minimum((np.asarray(progress, dtype=float) * 3).astype(int), 2)
 
 
-def fit_range(snaps: pd.DataFrame, **params) -> tuple:
+def fit_range(snaps: pd.DataFrame, features: list[str] | None = None, **params) -> tuple:
     """Quantile models for the low and high ends of the rest-of-season share."""
+    features = features or IN_SEASON_FEATURES
     return tuple(
         model(**(params | {"objective": "quantile", "alpha": a})).fit(
-            snaps[IN_SEASON_FEATURES], snaps.target, sample_weight=snaps.team_games_left
+            snaps[features], snaps.target, sample_weight=snaps.team_games_left
         )
         for a in (intervals.LOW, intervals.HIGH)
     )
 
 
-def range_adjustments(range_models, val: pd.DataFrame) -> list[float]:
+def range_adjustments(range_models, val: pd.DataFrame, features: list[str] | None = None) -> list[float]:
     """Conformal correction (in share of games left) for each third of the season.
 
     Early-season outcomes are much more uncertain, so each third gets its own
     correction; that keeps ranges honest (and wide) when few games have been played.
     """
-    low, high = (m.predict(val[IN_SEASON_FEATURES]) for m in range_models)
+    low, high = (m.predict(val[features or IN_SEASON_FEATURES]) for m in range_models)
     third = season_third(val.season_progress)
     return [intervals.conformal_adjustment(low[third == t], high[third == t], val.target[third == t]) for t in range(3)]
 
 
-def predict_range(range_models, adjustments, point_rest: np.ndarray, snaps: pd.DataFrame):
+def predict_range(range_models, adjustments, point_rest: np.ndarray, snaps: pd.DataFrame,
+                  features: list[str] | None = None):
     """Likely range of games still to come: quantile models + per-third correction, tidied."""
     left = snaps.team_games_left.to_numpy()
     adj = np.asarray(adjustments)[season_third(snaps.season_progress)]
-    low, high = (np.asarray(m.predict(snaps[IN_SEASON_FEATURES])) for m in range_models)
+    low, high = (np.asarray(m.predict(snaps[features or IN_SEASON_FEATURES])) for m in range_models)
     return intervals.tidy((low - adj) * left, point_rest, (high + adj) * left, floor=0, ceiling=left)
 
 
