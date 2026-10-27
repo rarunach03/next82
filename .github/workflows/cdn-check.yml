@@ -1,0 +1,27 @@
+name: cdn check
+
+# Manual diagnostic: can GitHub's servers reach the NBA's data hosts? Prints the
+# status, the server that answered, and the start of each response.
+on:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Request each URL with plain and browser-like headers
+        run: |
+          UA="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130 Safari/537.36"
+          for url in \
+            https://cdn.nba.com/static/json/staticData/scheduleLeagueV2.json \
+            https://cdn.nba.com/static/json/liveData/scoreboard/todaysScoreboard_00.json \
+            https://cdn.nba.com/static/json/liveData/boxscore/boxscore_0022600001.json \
+            "https://stats.nba.com/stats/scheduleleaguev2?LeagueID=00&Season=2026-27"; do
+            for headers in plain browser; do
+              if [ "$headers" = plain ]; then args=(); else args=(-H "User-Agent: $UA" -H "Referer: https://www.nba.com/" -H "Origin: https://www.nba.com" -H "Accept: application/json"); fi
+              out=$(curl -s -m 30 -D headers.txt -o body.txt -w "%{http_code} %{time_total}s" "${args[@]}" "$url" || echo "timeout/err")
+              server=$(grep -i -m1 '^server:' headers.txt 2>/dev/null | tr -d '\r' || true)
+              echo "$out | $headers | $server | $url"
+              echo "    body: $(head -c 150 body.txt 2>/dev/null | tr -d '\n')"
+            done
+          done
