@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router'
 import TierPill from '../components/TierPill'
-import { useFantasy } from '../data'
+import { shortDate, useFantasy } from '../data'
 import type { FantasyFormat, FantasyPlayer, Meta, Team, Tier } from '../types'
 
 const FORMATS: { id: FantasyFormat; label: string }[] = [
@@ -115,6 +115,9 @@ export default function Rankings({ meta, teams }: { meta: Meta; teams: Team[] })
     <article className="pt-10 pb-16">
       <p className="text-sm font-semibold tracking-widest text-accent uppercase">Fantasy</p>
       <h1 className="mt-2 font-display text-5xl leading-none font-extrabold tracking-tight uppercase">Rankings</h1>
+      {meta.updatedAsOf && (
+        <p className="mt-2 text-sm text-faint">Updated through {shortDate(meta.updatedAsOf)}</p>
+      )}
       <p className="mt-4 max-w-2xl text-muted">
         {view === 'ros' ? 'Rest-of-season' : 'Full-season'} value is per-game production above replacement level (the{' '}
         {fantasy.poolSize}th-best player per game, roughly the best free agent) times the games each player is forecast

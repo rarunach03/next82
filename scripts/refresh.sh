@@ -1,5 +1,8 @@
 #!/bin/bash
-# Daily refresh: current rosters and games played so far, then the website data.
+# Daily refresh. Downloads current rosters, this season's game logs and the draft
+# order (next82.data --current), then rebuilds everything the site shows from them
+# (next82.export): updated forecasts and their ranges, availability tiers, fantasy
+# values including rookies, and the accuracy page. The preseason forecast stays frozen.
 # Commits and pushes only if something changed; GitHub Actions then redeploys the site.
 # Runs on a home computer because stats.nba.com doesn't respond to cloud servers.
 set -euo pipefail
