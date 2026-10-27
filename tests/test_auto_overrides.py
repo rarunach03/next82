@@ -97,7 +97,17 @@ def test_team_timeline_from_news_replaces_the_estimate():
 
 def test_recovery_table_file_is_complete():
     table = auto_overrides.load_recovery()
-    assert set(table.injury_type) >= {"ACL", "Achilles", "labrum", "meniscus", "fracture"}
+    assert set(table.injury_type) >= {"ACL", "Achilles", "labrum", "meniscus", "fracture", "dislocation",
+                                      "surgery", "patellar tendon"}
+    for injury_type, body in [("fracture", "tibia fracture"), ("fracture", "fibula fracture"), ("fracture", "hand"),
+                              ("fracture", "wrist fracture"), ("dislocation", "ankle fracture/dislocation"),
+                              ("surgery", "low back surgery"), ("patellar tendon", "patellar tendon")]:
+        assert auto_overrides.recovery_row(table, injury_type, body) is not None, (injury_type, body)
+    # Minor or unstudied versions are left to the model.
+    for injury_type, body in [("dislocation", "ring finger dislocation"), ("fracture", "finger fracture"),
+                              ("surgery", "right knee surgery")]:
+        assert auto_overrides.recovery_row(table, injury_type, body) is None, (injury_type, body)
+    assert table.basis.notna().all()
     assert table.source_url.str.startswith("https://").all()
     assert (table.earliest_days < table.average_days).all()
 
@@ -137,3 +147,14 @@ def test_out_on_last_playoff_report_counts_from_last_playoff_game():
     last_playoff_game = pd.Timestamp("2026-05-01")
     r = auto_overrides.build(log, RECOVERY, NO_NEWS, [], pd.Series({1: last_playoff_game}), None, TODAY, end)[0].iloc[0]
     assert r.earliest_return == last_playoff_game + pd.Timedelta(days=298)
+
+
+def test_body_part_alternatives_and_first_matching_row_wins():
+    table = pd.DataFrame([
+        {"injury_type": "fracture", "body_part_contains": "tibia|lower leg", "earliest_days": 230},
+        {"injury_type": "fracture", "body_part_contains": "fibula", "earliest_days": 39},
+    ])
+    assert auto_overrides.recovery_row(table, "fracture", "lower leg fracture").earliest_days == 230
+    assert auto_overrides.recovery_row(table, "fracture", "tibia and fibula fracture").earliest_days == 230
+    assert auto_overrides.recovery_row(table, "fracture", "fibula fracture").earliest_days == 39
+    assert auto_overrides.recovery_row(table, "fracture", None) is None

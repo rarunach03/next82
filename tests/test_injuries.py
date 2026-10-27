@@ -9,6 +9,11 @@ from next82 import injuries
 @pytest.mark.parametrize("reason, injury_type, body", [
     ("Injury/Illness - Right Achilles Tendon; Repair / Surgery", "Achilles", "achilles tendon"),
     ("Injury/Illness - Right Achilles; Tendinitis", "soreness", "achilles"),      # not a rupture
+    ("Injury/Illness - Left Patellar Tendon; Repair / Surgery", "patellar tendon", "patellar tendon"),
+    ("Injury/Illness - Left Patellar Tendinitis", "soreness", "patellar tendinitis"),  # not a rupture
+    ("Injury/Illness - Right Ankle Fracture/Dislocation", "dislocation", "ankle fracture/dislocation"),
+    ("Injury/Illness - Left Fibula Fracture", "fracture", "fibula fracture"),
+    ("Injury/Illness - Low back surgery", "surgery", "low back surgery"),
     ("Injury/Illness - Left ACL Repair /; Surgery", "ACL", "acl repair /"),
     ("Injury/Illness - Left Meniscus Tear", "meniscus", "meniscus tear"),
     ("Injury/Illness - Left Foot Fracture", "fracture", "foot fracture"),

@@ -17,7 +17,6 @@ import pandas as pd
 from nba_api.stats.static import teams as nba_teams
 
 from next82 import config, data, injuries
-from next82.auto_overrides import load_recovery
 
 CACHE_DIR = config.RAW_DIR / "injury_history"
 FIRST_SEASON = "2019-20"
@@ -26,6 +25,9 @@ WEEK_AGO_DAYS = (8, 9, 10)     # trend: latest listing about a week earlier
 STATUS_LEVEL = {"Out": 4, "Doubtful": 3, "Questionable": 2, "Probable": 1, "Available": 0}
 INJURY_FEATURES = ["listed_out", "listed_level", "serious_injury", "out_week_ago", "status_trend", "days_listed"]
 DELAY = 1.0
+# Types counted as "serious" in the model's features: the recovery table's types when the
+# features were validated. Fixed, so adding recovery-table rows doesn't change the model.
+SERIOUS_TYPES = {"ACL", "Achilles", "labrum", "meniscus", "fracture"}
 
 
 def _season_players(season: str) -> pd.DataFrame:
@@ -94,7 +96,7 @@ def snapshot_features(season: str, date: pd.Timestamp, players: pd.DataFrame | N
 
 
 def serious_types() -> set:
-    return set(load_recovery().injury_type)
+    return SERIOUS_TYPES
 
 
 def add_to_snapshots(snaps: pd.DataFrame) -> pd.DataFrame:

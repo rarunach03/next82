@@ -32,6 +32,9 @@ INJURY_TYPES = [
     ("Achilles", ["achilles"]),
     ("labrum", ["labrum", "labral"]),
     ("meniscus", ["menisc"]),
+    ("patellar tendon", ["patellar tendon"]),
+    # Before fracture, so an ankle fracture-dislocation gets the dislocation estimate.
+    ("dislocation", ["dislocat"]),
     ("fracture", ["fracture", "broken"]),
     ("surgery", ["surgery", "repair", "reconstruction"]),
     ("sprain", ["sprain"]),
@@ -43,8 +46,9 @@ INJURY_TYPES = [
     ("personal", ["personal"]),
     ("suspension", ["suspension", "suspended"]),
 ]
-# Achilles soreness or tendinitis isn't a rupture: only these words make it the serious type.
-ACHILLES_SERIOUS = ["tear", "torn", "rupture", "repair", "surgery"]
+# Tendon soreness or tendinitis isn't a rupture: only these words make it the serious type.
+TENDONS = ("Achilles", "patellar tendon")
+TENDON_SERIOUS = ["tear", "torn", "rupture", "repair", "surgery"]
 NOT_INJURY = ["g league", "two-way", "not with team", "on assignment", "league assignment"]
 
 
@@ -190,7 +194,7 @@ def classify(reason: str) -> dict:
     injury_type = None
     for name, keys in INJURY_TYPES:
         if any(k in whole for k in keys):
-            if name == "Achilles" and not any(k in whole for k in ACHILLES_SERIOUS):
+            if name in TENDONS and not any(k in whole for k in TENDON_SERIOUS):
                 continue
             injury_type = name
             break

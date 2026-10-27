@@ -60,3 +60,8 @@ def test_snapshots_get_features_only_from_2019_20(monkeypatch):
     assert out.loc[0, ih.INJURY_FEATURES].isna().all()                    # no reports before 2019-20
     assert out.loc[1, "listed_out"] == 1 and out.loc[2, "listed_out"] == 0  # not listed = 0
     assert ih.add_to_snapshots(out).equals(out)                            # safe to run twice
+
+
+def test_serious_types_for_the_model_stay_fixed():
+    # The model was validated with these; new recovery-table rows mustn't change its features.
+    assert ih.serious_types() == {"ACL", "Achilles", "labrum", "meniscus", "fracture"}

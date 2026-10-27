@@ -28,7 +28,8 @@ what drives each number, and turns it into fantasy basketball rankings.
 - **Accuracy page.** The frozen preseason forecast graded every day against games played so far,
   next to two simple guesses, with an honest "too early to tell" while the gap could be luck.
 - **Injury adjustments.** The NBA's official injury report is read daily. Players listed Out with a
-  serious injury (ACL, Achilles, labrum, meniscus, foot fracture) get an automatic return estimate
+  serious injury (ACL, Achilles, labrum, meniscus, patellar tendon tear; foot, lower-leg, fibula,
+  hand or wrist fracture; ankle dislocation; back surgery) get an automatic return estimate
   from cited recovery studies; team-announced timelines and manual adjustments override it. Each is
   labeled on the site with its sources.
 - **Fantasy tools.** A trade analyzer (rest-of-season value of two sides, shareable by link), a
@@ -144,9 +145,14 @@ season-ending).
    the second source optional; `estimated` = yes for our own estimate). Use it when the report is less
    specific than the news. The site and the refresh log flag a manual row past its review-by date.
 
-**Recovery table** (`data/recovery_table.csv`): each serious injury type, the average NBA return from a
-cited study, the fast end used as the earliest return (average minus one standard deviation when the
-study reports it, otherwise 80% of the average), and whether it can be season-ending.
+**Recovery table** (`data/recovery_table.csv`): each serious injury type, the average return from a
+cited study (NBA where one exists, otherwise other pro leagues), the fast end used as the earliest
+return (average minus one standard deviation, or the lower quartile, when the study reports a spread;
+otherwise 80% of the average), the latest return (average plus one standard deviation, or 1.5 times
+the average without a spread; none if it can be season-ending), and whether it can be season-ending.
+`body_part_contains` limits a row to body parts containing one of its `|`-separated words; the first
+matching row wins. Finger, thumb and other minor versions are left to the model. Stress fractures are
+classified as fractures too, so a tibia or fibula stress fracture gets the traumatic-fracture estimate.
 
 ## How it works
 

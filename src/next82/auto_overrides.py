@@ -57,11 +57,12 @@ def load_news(path=None) -> pd.DataFrame:
 
 
 def recovery_row(recovery: pd.DataFrame, injury_type, body_part) -> pd.Series | None:
-    """The table row for an injury, if it's a serious type we have an estimate for."""
+    """The table row for an injury, if it's a serious type we have an estimate for.
+    body_part_contains may list alternatives separated by "|"; the first matching row wins."""
     rows = recovery[recovery.injury_type == injury_type]
     for _, r in rows.iterrows():
         need = r.body_part_contains
-        if pd.isna(need) or (isinstance(body_part, str) and need in body_part):
+        if pd.isna(need) or (isinstance(body_part, str) and any(n in body_part for n in need.split("|"))):
             return r
     return None
 
