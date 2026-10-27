@@ -55,7 +55,7 @@ export default function Player({ meta }: { meta: Meta }) {
             <p className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1">
               <span className="tabular font-display text-7xl leading-none font-extrabold text-accent">{lead.games}</span>
               <span className="text-xl text-muted">games this season</span>
-              {lead.low !== null && lead.high !== null && (
+              {lead.low !== null && lead.high !== null && lead.low !== lead.high && (
                 <span className="text-muted">
                   (<Tip tip={GLOSSARY.likelyRange}>likely</Tip>{' '}
                   <span className="tabular text-ink">
@@ -146,7 +146,12 @@ function sentence(p: PlayerDetail, meta: Meta): string {
   const o = p.override
   if (o?.indefinite || (o && !o.earliestReturn))
     return capitalize(`${out} with no return date yet, so the ${rest} more games expected is a rough middle guess and could be far fewer.`)
-  if (o && rest === 0) return capitalize(`${out}, ${returnText(o)}, so no more games are expected this season.`)
+  if (o && rest === 0) {
+    const when = returnText(o)
+    return capitalize(
+      `${when.startsWith('out for the season') ? when : `out, ${when}`}${injury ? ` (${injury})` : ''}, so no more games are expected this season.`,
+    )
+  }
   if (o) return capitalize(`${out}, ${returnText(o)}, which leaves room for about ${rest} of the team's ${p.gamesLeft} remaining games.`)
   if (p.out?.reason === 'injury report') return capitalize(`listed ${out} on the latest injury report with no return date yet, and ${games}.`)
   if (p.absenceStreak !== null && p.absenceStreak >= 2)

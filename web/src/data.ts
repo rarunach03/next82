@@ -144,7 +144,7 @@ export function isInjured(p: WithInjury): boolean {
   return p.override !== null || p.out?.reason === 'injury report'
 }
 
-/** "left foot fracture", "right achilles tendon (repair / surgery)", or null. */
+/** "left foot fracture", "right achilles tendon, repair / surgery", or null. */
 export function injuryName(p: WithInjury): string | null {
   const raw = p.out?.injury
   if (!raw) return null
@@ -153,7 +153,7 @@ export function injuryName(p: WithInjury): string | null {
     .split(';')
     .map((s) => s.trim().toLowerCase().replace(/\s*\/\s*$/, '').replace(/\b(acl|mcl|pcl|lcl)\b/g, (m) => m.toUpperCase()))
   const extra = kind.filter(Boolean)
-  return extra.length ? `${body} (${extra.join(', ')})` : body
+  return extra.length ? `${body}, ${extra.join(', ')}` : body
 }
 
 /** Set once from the index: the regular season's last day, for "out for the season". */
