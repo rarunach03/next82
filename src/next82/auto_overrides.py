@@ -84,9 +84,11 @@ def recovery_row(recovery: pd.DataFrame, injury_type, body_part) -> pd.Series | 
 
 
 def current_listings(log: pd.DataFrame) -> pd.DataFrame:
-    """Each player's row from his team's most recent report day in the log."""
+    """Each player's row from his team's most recent report day in the log (one row per
+    player: after a trade, the newest listing wins)."""
     latest_day = log.groupby("team").report_day.transform("max")
-    return log[log.report_day == latest_day]
+    current = log[log.report_day == latest_day].sort_values("report_day", kind="stable")
+    return current[current.PLAYER_ID.isna() | ~current.PLAYER_ID.duplicated(keep="last")]
 
 
 def last_games(player_games: pd.DataFrame | None, before_season: pd.DataFrame | None) -> pd.Series:

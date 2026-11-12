@@ -126,7 +126,9 @@ def parse_report(pdf: bytes) -> pd.DataFrame:
                         name = c
                 return name
 
-            body = [w for w in words if w["top"] > body_top and not w["text"].startswith("Page")]
+            # Drop the whole "Page N of M" footer: its N sits under the team column.
+            footers = {round(w["top"]) for w in words if w["text"].startswith("Page")}
+            body = [w for w in words if w["top"] > body_top and round(w["top"]) not in footers]
             lines: dict[tuple[str, int], list] = {}
             for w in body:
                 c = column(w["x0"])
