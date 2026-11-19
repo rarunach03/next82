@@ -57,3 +57,8 @@ REGULAR_SEASON_GAMES = 82
 # Safe if even a bad outcome is TIER_SAFE_LOW+ games, Risky if a bad outcome is a
 # setback season (fewer than SETBACK_GAMES), Moderate in between.
 TIER_SAFE_LOW = 45
+
+# Game-by-game availability (beta, next82.game_level). The site shows it only when this
+# is on AND every quality gate in models/game_level_metrics.json passed; otherwise, or if
+# the daily step fails, the beta stays hidden and the rest of the site is unchanged.
+GAME_LEVEL_BETA = False

@@ -30,6 +30,9 @@ models/*
 !models/in_season*.txt
 !models/in_season_metrics.json
 !models/metrics.json
+!models/game_level.txt
+!models/game_level_metrics.json
+!models/game_level_calibration.png
 !data/raw/current_rosters/
 data/raw/current_rosters/*
 !data/raw/current_rosters/*.parquet
