@@ -16,8 +16,8 @@ from datetime import datetime
 import numpy as np
 import pandas as pd
 
-from next82 import (accuracy, auto_overrides, back_to_back, config, data, evaluate, fantasy, in_season, injuries,
-                    overrides, rookies)
+from next82 import (accuracy, auto_overrides, back_to_back, config, data, evaluate, fantasy, game_level, in_season,
+                    injuries, overrides, rookies)
 from next82.intervals import tier
 from next82.explain import GAMES, similar_comebacks, top_factors
 from next82.preseason import load_forecasts, load_ranges
@@ -189,6 +189,72 @@ def in_season_accuracy() -> dict:
         "updatedBestBaseline": best,
         "updatedBestBaselineMae": round(baselines[best], 1),
     }
+
+
+def write_game_beta(forecasts: pd.DataFrame, rosters: pd.DataFrame | None, today: pd.Timestamp) -> bool:
+    """games.json (beta): each player's chance of playing his team's next games, at least
+    five and through the end of this fantasy week, with the live injury status on top.
+    Written only when config.GAME_LEVEL_BETA is on and every quality gate passed. Returns
+    whether the site shows the beta."""
+    path = OUT_DIR / "games.json"
+    path.unlink(missing_ok=True)
+    if not config.GAME_LEVEL_BETA:
+        return False
+    booster, calibration, metrics = game_level.load_model()
+    if not metrics["all_passed"]:
+        print("Game-by-game beta hidden: a quality gate failed (models/game_level_metrics.json)")
+        return False
+    logs, schedule = data.saved_season_logs(), data.saved_schedule()
+    if logs is None or logs[0].empty or schedule is None or rosters is None:
+        return False
+    player_games, team_games = logs
+    player_games = player_games.assign(GAME_DATE=game_level.to_date(player_games.GAME_DATE))
+    sched = pd.concat([team_games[["TEAM_ID", "GAME_ID", "GAME_DATE"]], schedule[["TEAM_ID", "GAME_ID", "GAME_DATE"]]])
+    sched = sched.assign(GAME_DATE=game_level.to_date(sched.GAME_DATE)).drop_duplicates(["TEAM_ID", "GAME_ID"])
+    rows = game_level.upcoming_rows(player_games, sched, game_level.priors_from_forecasts(load_forecasts()),
+                                    rosters.set_index("PLAYER_ID").TEAM_ID, today, game_level.week_end(today))
+    if rows.empty:
+        return False
+    log = injuries.saved_log()
+    listing = auto_overrides.current_listings(log) if log is not None and len(log) else pd.DataFrame(columns=["PLAYER_ID", "status"])
+    listed_out = set(listing.loc[listing.status == "Out", "PLAYER_ID"].dropna().astype(int))
+    earliest = forecasts.set_index("PLAYER_ID").override_earliest.dropna()
+    p, reasons = game_level.apply_injury_status(rows, game_level.predict(rows, booster, calibration), listed_out, earliest)
+    if not ((p >= 0) & (p <= 1)).all():
+        raise ValueError("game-level probabilities outside [0, 1]")
+
+    abbr = dict(zip(rosters.TEAM_ID, rosters.TEAM_ABBREVIATION))
+    players: dict[str, list] = {}
+    for r, prob, why in zip(rows.itertuples(), p, reasons):
+        players.setdefault(str(int(r.PLAYER_ID)), []).append({
+            "date": r.GAME_DATE.strftime("%Y-%m-%d"),
+            "opponent": abbr.get(r.opponent),
+            "p": round(float(prob), 3),
+            "override": why,
+        })
+    t = metrics["test"]
+    write_json(path, {
+        "asOf": today.strftime("%Y-%m-%d"),
+        "weekEnd": game_level.week_end(today).strftime("%Y-%m-%d"),
+        "model": {
+            "testSeasons": metrics["seasons"]["test"],
+            "calibrationSeason": metrics["seasons"]["calibration"][0],
+            "trainSeasons": [metrics["seasons"]["train"][0], metrics["seasons"]["train"][-1]],
+            "testRows": t["rows"],
+            "logLoss": round(t["log_loss"], 3),
+            "logLossRateSoFar": round(t["log_loss_rate_so_far"], 3),
+            "logLossLastSeason": round(t["log_loss_last_season"], 3),
+            "ece": round(t["ece"], 3),
+            "accuracy": round(t["accuracy"], 3),
+            "seasonTotalMae": round(t["season_total_mae"], 1),
+            "calibration": [{"predicted": round(b["predicted"], 3), "actual": round(b["actual"], 3), "n": b["n"]}
+                            for b in t["calibration"]],
+            "outProbability": game_level.OUT_PROBABILITY,
+        },
+        "players": players,
+    })
+    print(f"Game-by-game beta: {len(rows)} upcoming games for {len(players)} players")
+    return True
 
 
 def write_accuracy(rosters: pd.DataFrame | None):
@@ -473,6 +539,13 @@ def main():
 
     write_fantasy(forecasts, target, rosters)
     write_accuracy(rosters)
+    # The beta must never stop the export: on any failure it's hidden and the rest goes out.
+    try:
+        game_beta = write_game_beta(forecasts, rosters, today)
+    except Exception as e:  # noqa: BLE001
+        (OUT_DIR / "games.json").unlink(missing_ok=True)
+        print(f"WARNING: game-by-game beta skipped ({type(e).__name__}: {e}); the site hides it")
+        game_beta = False
 
     teams = []
     if rosters is not None:
@@ -500,6 +573,8 @@ def main():
             "updatedAsOf": str(updated_as_of)[:10] if updated_as_of is not None else None,
             # Last day of this regular season, so the site can say "out for the season".
             "regularSeasonEnd": regular_season_end(),
+            # Game-by-game availability (beta): games.json is there and the site shows it.
+            "gameBeta": game_beta,
             "generatedAt": datetime.now().isoformat(timespec="seconds"),
             "games": GAMES,
             "setbackGames": config.SETBACK_GAMES,

@@ -573,6 +573,17 @@ def apply_injury_status(rows: pd.DataFrame, p: np.ndarray, listed_out: set, earl
     return p, reasons
 
 
+def priors_from_forecasts(forecasts: pd.DataFrame) -> pd.DataFrame:
+    """Last season's facts for the season being forecast, from the committed forecast rows
+    (the same table rows prior_season reads, so live and training features agree)."""
+    return pd.DataFrame({
+        "PLAYER_ID": forecasts.PLAYER_ID.to_numpy(),
+        "age": (forecasts.age + 1).to_numpy(),
+        "mpg_last": forecasts.mpg.to_numpy(),
+        "gp_share_last": forecasts.gp_share.to_numpy(),
+    }).drop_duplicates("PLAYER_ID")
+
+
 def week_end(today: pd.Timestamp) -> pd.Timestamp:
     """The Sunday ending today's fantasy week (Monday to Sunday)."""
     return today + pd.Timedelta(days=6 - today.weekday())

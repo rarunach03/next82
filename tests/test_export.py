@@ -147,3 +147,81 @@ def test_positions_are_listed_positions(out):
     if not data.saved_positions().empty:
         rostered = [p for p in index["players"] if p["team"]]
         assert sum(p["position"] is not None for p in rostered) >= 0.95 * len(rostered)
+
+
+def _export_to(tmp_path, monkeypatch, beta: bool):
+    from next82 import config
+
+    monkeypatch.setattr(config, "GAME_LEVEL_BETA", beta)
+    monkeypatch.setattr(export, "OUT_DIR", tmp_path)
+    export.main()
+    return json.loads((tmp_path / "index.json").read_text())
+
+
+def test_game_beta_follows_the_flag(out):
+    from next82 import config
+
+    meta = json.loads((out / "index.json").read_text())["meta"]
+    assert meta["gameBeta"] == (out / "games.json").exists()
+    if not config.GAME_LEVEL_BETA:
+        assert not meta["gameBeta"]
+
+
+def test_game_beta_when_on(tmp_path, monkeypatch):
+    from next82 import game_level
+
+    meta = _export_to(tmp_path, monkeypatch, beta=True)["meta"]
+    if not game_level.METRICS_PATH.exists() or not meta["seasonStarted"]:
+        pytest.skip("no model or no season in progress")
+    assert meta["gameBeta"]
+    games = json.loads((tmp_path / "games.json").read_text())
+    index = json.loads((tmp_path / "index.json").read_text())
+    by_id = {p["id"]: p for p in index["players"]}
+    assert len(games["players"]) > 300
+    for pid, upcoming in games["players"].items():
+        assert len(upcoming) >= 1
+        assert [g["date"] for g in upcoming] == sorted(g["date"] for g in upcoming)
+        assert all(0 <= g["p"] <= 1 and g["date"] >= games["asOf"] for g in upcoming)
+        p = by_id.get(int(pid))
+        o = p and p["override"]
+        # An expected return date: every game before it is near zero.
+        if o and o["earliestReturn"]:
+            for g in upcoming:
+                if g["date"] < o["earliestReturn"][:10]:
+                    assert g["p"] <= 0.05 and g["override"] == "return date"
+        # Listed Out on the latest report: the next game is near zero.
+        if p and p["out"] and p["out"]["reason"] == "injury report" and p["out"]["status"] == "Out":
+            assert upcoming[0]["p"] <= 0.05
+    # Healthy rotation players (Safe tier, not out) are very likely to play next.
+    safe = [games["players"][str(p["id"])][0]["p"] for p in index["players"]
+            if p["tier"] == "Safe" and not p["out"] and str(p["id"]) in games["players"]]
+    assert len(safe) > 50 and sum(safe) / len(safe) >= 0.85
+
+
+def test_game_beta_failure_hides_it_and_the_export_finishes(tmp_path, monkeypatch):
+    from next82 import game_level
+
+    def broken(*args, **kwargs):
+        raise RuntimeError("simulated failure")
+
+    monkeypatch.setattr(game_level, "upcoming_rows", broken)
+    index = _export_to(tmp_path, monkeypatch, beta=True)
+    assert index["meta"]["gameBeta"] is False
+    assert not (tmp_path / "games.json").exists()
+    assert len(index["players"]) > 300 and (tmp_path / "fantasy.json").exists()
+
+
+def test_game_beta_live_priors_match_training_priors():
+    import pandas as pd
+
+    from next82 import config, game_level
+    from next82.features import OUTPUT_PATH, load_table
+    from next82.preseason import load_forecasts
+
+    if not OUTPUT_PATH.exists():
+        pytest.skip("feature table not built")
+    live = game_level.priors_from_forecasts(load_forecasts()).set_index("PLAYER_ID").sort_index()
+    trained = game_level.prior_season(load_table(), config.FORECAST_SEASON).set_index("PLAYER_ID").sort_index()
+    shared = live.index.intersection(trained.index)
+    assert len(shared) > 300
+    pd.testing.assert_frame_equal(live.loc[shared], trained.loc[shared], check_dtype=False)
