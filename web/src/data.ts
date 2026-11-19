@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { Fantasy, FantasyFormat, Index, OutInfo, Override, PlayerDetail, PlayerSummary, SeasonAccuracy } from './types'
+import type { Fantasy, FantasyFormat, GameBeta, Index, OutInfo, Override, PlayerDetail, PlayerSummary, SeasonAccuracy } from './types'
 
 /** Where the site is served from: "/" locally, "/next82/" on GitHub Pages. */
 // (import.meta.env is undefined under `node --test`, which imports the helpers below.)
@@ -20,6 +20,21 @@ export function useIndex(): Index | null {
     indexPromise.then(setIndex)
   }, [])
   return index
+}
+
+let gamesPromise: Promise<GameBeta | null> | null = null
+
+/** Game-by-game chances (beta). `undefined` while loading, `null` when the beta is off or missing. */
+export function useGames(enabled: boolean): GameBeta | null | undefined {
+  const [games, setGames] = useState<GameBeta | null | undefined>(enabled ? undefined : null)
+  useEffect(() => {
+    if (!enabled) return
+    gamesPromise ??= fetch(`${BASE}data/games.json`)
+      .then((r) => (r.ok ? r.json() : null))
+      .catch(() => null)
+    gamesPromise.then(setGames)
+  }, [enabled])
+  return enabled ? games : null
 }
 
 let fantasyPromise: Promise<Fantasy | null> | null = null

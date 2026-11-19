@@ -1,8 +1,9 @@
 import { useEffect } from 'react'
 import { Link, useLocation } from 'react-router'
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { baselineText, shortDate, useAccuracy } from '../data'
-import type { AccuracyMethod, Meta, SeasonAccuracy } from '../types'
+import CalibrationChart from '../components/CalibrationChart'
+import { baselineText, shortDate, useAccuracy, useGames } from '../data'
+import type { AccuracyMethod, GameBetaModel, Meta, SeasonAccuracy } from '../types'
 
 // Categorical slots 1-3 of the project's validated dark palette (colorblind-safe on
 // the dark surface, all pairs); the forecast takes the orange to match the site accent.
@@ -23,11 +24,12 @@ const PARTS = [
 export default function HowItWorks({ meta }: { meta: Meta }) {
   const a = meta.accuracy
   const season = useAccuracy()
+  const games = useGames(meta.gameBeta === true)
   const { hash } = useLocation()
   // Linked to a part (/how-it-works#accuracy): scroll there, again once this season's grading has loaded.
   useEffect(() => {
     if (hash) document.getElementById(hash.slice(1))?.scrollIntoView()
-  }, [hash, season])
+  }, [hash, season, games])
 
   return (
     <article className="pt-10 pb-16">
@@ -141,6 +143,8 @@ export default function HowItWorks({ meta }: { meta: Meta }) {
           seasons, pulled toward the league average because the samples are small).
         </p>
       </Section>
+
+      {games && <GameBetaSection model={games.model} />}
 
       <Section title="The data">
         <p className="text-ink">
@@ -428,5 +432,39 @@ function ThisSeason({ meta, a }: { meta: Meta; a: SeasonAccuracy | null | undefi
         </p>
       </section>
     </section>
+  )
+}
+
+/** The game-by-game beta: what it predicts, how it's checked, and the injury-status override. */
+function GameBetaSection({ model: m }: { model: GameBetaModel }) {
+  return (
+    <div id="game-beta" className="scroll-mt-20">
+      <Section title="Game by game (beta)">
+        <p>
+          A second model predicts, for each upcoming game, the chance a player plays in it. It looks at rest and
+          back-to-backs, games played and missed lately (and the current run of missed games), minutes recently and last
+          season, games played last season, age, and how far into the season it is. Rows come from every team game while a
+          player was on the team: game logs only list games played, so missed games come from the team's schedule. It's a
+          LightGBM model trained on {m.trainSeasons[0]} to {m.trainSeasons[1]}, calibrated on {m.calibrationSeason} and
+          tested on {m.testSeasons.join(' and ')} ({m.testRows.toLocaleString('en-US')} player-games), the same seasons the
+          season forecasts are tested on.
+        </p>
+        <p>
+          On the test seasons its log loss (lower is better) was <strong className="text-ink">{m.logLoss}</strong>, against{' '}
+          {m.logLossRateSoFar} for guessing each player's play rate so far this season and {m.logLossLastSeason} for their
+          rate last season. It's well calibrated: when it says 70%, players played about 70% of the time (average gap{' '}
+          {(m.ece * 100).toFixed(1)} points). Adding up each game's chance over a season, made the day before each game,
+          lands within {m.seasonTotalMae} games of the real total on average.
+        </p>
+        <CalibrationChart bins={m.calibration} />
+        <p>
+          The official injury report isn't a model input (there's no history of it to learn from). Instead, the live
+          status goes on top: a player listed Out on the latest report gets under 5% for the next game, and a known return
+          date puts every game before it under 5%; after that, the model takes over. The next game uses everything known
+          today; later games assume today's status carries on, so they're rougher. It tends to slightly underrate a quick
+          return after a regular misses a single game.
+        </p>
+      </Section>
+    </div>
   )
 }

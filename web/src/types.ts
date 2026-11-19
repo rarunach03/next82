@@ -36,6 +36,8 @@ export interface Meta {
   tierSafeLow: number
   /** League-wide rate of sitting the second night of a back-to-back. */
   b2bLeagueRate: number | null
+  /** Game-by-game availability (beta) is on and games.json is there. */
+  gameBeta?: boolean
   accuracy: Accuracy
 }
 
@@ -239,4 +241,40 @@ export interface SeasonAccuracy {
   trend: AccuracyPoint[]
   seasonGames: number
   testSeasons: { seasons: [string, string]; model: number; bestBaseline: number }
+}
+
+// games.json (beta), written by `python -m next82.export` only when every quality gate passed.
+export interface UpcomingGame {
+  date: string
+  opponent: string | null
+  /** Chance the player plays this game. */
+  p: number
+  /** Set by the live injury status instead of the model. */
+  override: 'injury report' | 'return date' | null
+}
+
+export interface GameBetaModel {
+  testSeasons: string[]
+  calibrationSeason: string
+  trainSeasons: [string, string]
+  testRows: number
+  logLoss: number
+  logLossRateSoFar: number
+  logLossLastSeason: number
+  /** Expected calibration error on the test seasons. */
+  ece: number
+  accuracy: number
+  /** Average miss when each season's day-ahead chances are added up, in games. */
+  seasonTotalMae: number
+  calibration: { predicted: number; actual: number; n: number }[]
+  outProbability: number
+}
+
+export interface GameBeta {
+  asOf: string
+  /** Sunday ending this fantasy week (Monday to Sunday). */
+  weekEnd: string
+  model: GameBetaModel
+  /** Upcoming games by player id: the next five and every game through weekEnd. */
+  players: Record<string, UpcomingGame[]>
 }

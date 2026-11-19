@@ -2,17 +2,19 @@ import { Link, useParams } from 'react-router'
 import FactorChart from '../components/FactorChart'
 import HistoryChart from '../components/HistoryChart'
 import InjuredBadge from '../components/InjuredBadge'
+import NextGames from '../components/NextGames'
 import OverrideNote from '../components/OverrideNote'
 import RangeBar from '../components/RangeBar'
 import Tip from '../components/Tip'
 import { GLOSSARY } from '../glossary'
 import TierPill from '../components/TierPill'
-import { injuryName, playedText, returnText, shortDate, soFarText, usePlayer } from '../data'
+import { injuryName, playedText, returnText, shortDate, soFarText, useGames, usePlayer } from '../data'
 import type { Meta, PlayerDetail } from '../types'
 
 export default function Player({ meta }: { meta: Meta }) {
   const id = Number(useParams().id)
   const p = usePlayer(id)
+  const games = useGames(meta.gameBeta === true)
 
   if (p === undefined) return <p className="py-16 text-muted">Loading…</p>
   if (p === null)
@@ -83,6 +85,8 @@ export default function Player({ meta }: { meta: Meta }) {
         )}
         <Forecasts p={p} meta={meta} />
       </section>
+
+      {games && p.team && <NextGames games={games.players[String(p.id)]} />}
 
       <section className="mt-10">
         <h2 className="font-display text-2xl font-bold uppercase">What drives the preseason forecast{p.comeback && ' if healthy'}</h2>

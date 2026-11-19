@@ -6,7 +6,8 @@ import RosterPicker from '../components/RosterPicker'
 import ScoringPicker from '../components/ScoringPicker'
 import Tip from '../components/Tip'
 import { GLOSSARY } from '../glossary'
-import { isInjured, parseFormat, useFantasy } from '../data'
+import { isInjured, parseFormat, shortDate, useFantasy, useGames } from '../data'
+import { weekLines } from '../gameBeta'
 import { isHighRisk, rosterFlags, RULES, type Flag } from '../roster/flags.ts'
 import { MAX_ROSTER, restValue, rosterPool, teamPosition, type RosterPlayer } from '../roster/model.ts'
 import { simulate, RUNS, type Simulation } from '../roster/simulate.ts'
@@ -14,11 +15,12 @@ import { swapSuggestions } from '../roster/swaps.ts'
 import { DEFAULT_SEED, loadSaved, save, type Saved } from '../roster/storage.ts'
 import { parseTrade, rosterAfter, tradeParam, type Trade } from '../roster/trade.ts'
 import TradePanel from '../components/TradePanel'
-import type { Fantasy, FantasyFormat, Index } from '../types'
+import type { Fantasy, FantasyFormat, GameBeta, Index } from '../types'
 
 /** Build (or enter) a fantasy roster and see how its availability holds up. Saved in this browser. */
 export default function MyRoster({ index }: { index: Index }) {
   const fantasy = useFantasy()
+  const games = useGames(index.meta.gameBeta === true)
   const [saved, setSaved] = useState<Saved>(loadSaved)
   // Scoring and the trade being tested live in the URL, so a trade can be shared.
   const [params, setParams] = useSearchParams()
@@ -127,6 +129,8 @@ export default function MyRoster({ index }: { index: Index }) {
           </button>
         )}
       </section>
+
+      {games && roster.length > 0 && <ThisWeek roster={roster} beta={games} />}
 
       {trade && fantasy && after && (
         <TradePanel
@@ -534,3 +538,46 @@ function Swaps({
   )
 }
 
+
+/** Beta: games each player has left this fantasy week and how many they're expected to play. */
+function ThisWeek({ roster, beta }: { roster: RosterPlayer[]; beta: GameBeta }) {
+  const lines = weekLines(
+    roster.map((p) => p.id),
+    beta,
+  )
+  if (lines.length === 0) return null
+  const names = new Map(roster.map((p) => [p.id, p.name]))
+  const expected = lines.reduce((s, l) => s + l.expected, 0)
+  const scheduled = lines.reduce((s, l) => s + l.games, 0)
+  const missing = roster.length - lines.length
+  return (
+    <section className="mt-8 rounded-2xl border border-line bg-surface p-4 sm:p-5">
+      <div className="flex items-center gap-2">
+        <h2 className="font-display text-2xl font-bold uppercase">This week</h2>
+        <span className="rounded-full border border-accent/50 px-2 py-0.5 text-xs font-semibold text-accent">Beta</span>
+      </div>
+      <p className="mt-2">
+        <span className="tabular font-display text-4xl font-bold">{expected.toFixed(1)}</span>
+        <span className="ml-2 text-muted">
+          expected games of {scheduled} scheduled, through Sunday {shortDate(beta.weekEnd)}
+        </span>
+      </p>
+      <ul className="mt-3 grid gap-x-6 gap-y-1 text-sm sm:grid-cols-2">
+        {[...lines]
+          .sort((a, b) => b.expected - a.expected)
+          .map((l) => (
+            <li key={l.id} className="flex justify-between gap-3 border-b border-line/60 py-1.5">
+              <span className="truncate">{names.get(l.id)}</span>
+              <span className="tabular shrink-0 text-muted">
+                <span className="font-semibold text-ink">{l.expected.toFixed(1)}</span> of {l.games}
+              </span>
+            </li>
+          ))}
+      </ul>
+      <p className="mt-3 text-xs text-faint">
+        Each game's chance of playing, added up, from the game-by-game model (beta).
+        {missing > 0 && ` ${missing === 1 ? '1 player has' : `${missing} players have`} no chances yet (no game with their current team).`}
+      </p>
+    </section>
+  )
+}
