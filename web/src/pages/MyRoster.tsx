@@ -6,16 +6,23 @@ import Tip from '../components/Tip'
 import { GLOSSARY } from '../glossary'
 import { isInjured, useFantasy } from '../data'
 import { isHighRisk, rosterFlags, RULES, type Flag } from '../roster/flags.ts'
-import { MAX_ROSTER, rosterPool, searchPool, type RosterPlayer } from '../roster/model.ts'
+import { MAX_ROSTER, restValue, rosterPool, searchPool, type RosterPlayer } from '../roster/model.ts'
 import { simulate, RUNS, type Simulation } from '../roster/simulate.ts'
 import { swapSuggestions } from '../roster/swaps.ts'
 import { DEFAULT_SEED, loadSaved, save, type Saved } from '../roster/storage.ts'
-import type { Index } from '../types'
+import type { Fantasy, FantasyFormat, Index } from '../types'
+
+const FORMATS: { id: FantasyFormat; label: string }[] = [
+  { id: 'espn', label: 'ESPN points' },
+  { id: 'yahoo', label: 'Yahoo points' },
+  { id: 'cat9', label: '9-cat' },
+]
 
 /** Build (or enter) a fantasy roster and see how its availability holds up. Saved in this browser. */
 export default function MyRoster({ index }: { index: Index }) {
   const fantasy = useFantasy()
   const [saved, setSaved] = useState<Saved>(loadSaved)
+  const [format, setFormat] = useState<FantasyFormat>('espn')
   useEffect(() => save(saved), [saved])
 
   const pool = useMemo(() => (fantasy === undefined ? null : rosterPool(index.players, fantasy)), [index, fantasy])
@@ -25,7 +32,7 @@ export default function MyRoster({ index }: { index: Index }) {
     return saved.ids.map((id) => byId.get(id)).filter((p): p is RosterPlayer => p !== undefined)
   }, [pool, saved.ids])
   const sim = useMemo(() => simulate(roster, saved.seed), [roster, saved.seed])
-  const flags = useMemo(() => rosterFlags(roster, sim, (p) => p.perGame?.espn ?? null), [roster, sim])
+  const flags = useMemo(() => rosterFlags(roster, sim, (p) => p.perGame?.[format] ?? null), [roster, sim, format])
   if (!pool) return <p className="py-16 text-muted">Loading…</p>
 
   const missing = saved.ids.length - roster.length
@@ -69,7 +76,17 @@ export default function MyRoster({ index }: { index: Index }) {
             No players yet. Search above to add your first one.
           </p>
         ) : (
-          <RosterTable roster={roster} onRemove={remove} safeLow={meta.tierSafeLow} riskyLow={meta.setbackGames} />
+          <>
+            {fantasy && <FormatPicker format={format} onChange={setFormat} />}
+            <RosterTable
+              roster={roster}
+              onRemove={remove}
+              safeLow={meta.tierSafeLow}
+              riskyLow={meta.setbackGames}
+              fantasy={fantasy ?? null}
+              format={format}
+            />
+          </>
         )}
       </section>
 
@@ -82,6 +99,16 @@ export default function MyRoster({ index }: { index: Index }) {
       {roster.some(isHighRisk) && (
         <Swaps roster={roster} pool={pool} onSwap={swap} safeLow={meta.tierSafeLow} riskyLow={meta.setbackGames} />
       )}
+
+      <p className="mt-8 text-xs text-faint">
+        Next82 forecasts availability: how many games each player will play. Value multiplies that by production per
+        game from the{' '}
+        <Link to="/rankings" className="text-muted underline-offset-2 hover:underline">
+          fantasy rankings
+        </Link>{' '}
+        (this season blended with the last three); it doesn't forecast changes in a player's role or form. The simulation
+        treats players as independent, so it doesn't capture a whole team resting stars late in the season.
+      </p>
     </article>
   )
 }
@@ -190,12 +217,20 @@ function RosterTable({
   onRemove,
   safeLow,
   riskyLow,
+  fantasy,
+  format,
 }: {
   roster: RosterPlayer[]
   onRemove: (id: number) => void
   safeLow: number
   riskyLow: number
+  fantasy: Fantasy | null
+  format: FantasyFormat
 }) {
+  const value = (p: RosterPlayer) => (fantasy ? restValue(p, format, fantasy.replacement[format]) : null)
+  const values = roster.map(value)
+  const total = values.reduce<number>((s, v) => s + (v ?? 0), 0)
+  const fmtValue = (v: number | null) => (v === null ? '–' : Math.round(v).toLocaleString('en-US'))
   return (
     <div className="mt-4 overflow-x-auto rounded-2xl border border-line bg-surface">
       <table className="w-full text-sm">
@@ -213,13 +248,20 @@ function RosterTable({
             <th className="hidden py-3 pr-2 font-medium uppercase sm:table-cell sm:pr-3">
               <Tip tip={GLOSSARY.tier(safeLow, riskyLow)}>Availability</Tip>
             </th>
+            {fantasy && (
+              <th className="hidden py-3 pr-2 text-right font-medium uppercase sm:table-cell sm:pr-3">
+                <Tip tip={`Production per game above a free-agent pickup, times games expected from here on. ${GLOSSARY.aboveReplacement(fantasy.poolSize)}`}>
+                  Value
+                </Tip>
+              </th>
+            )}
             <th className="w-10 py-3 pr-3 sm:pr-4">
               <span className="sr-only">Remove</span>
             </th>
           </tr>
         </thead>
         <tbody>
-          {roster.map((p) => (
+          {roster.map((p, i) => (
             <tr key={p.id} className="border-b border-line/60 last:border-0">
               <td className="py-3 pr-2 pl-3 sm:pl-4">
                 {p.rookie ? (
@@ -250,6 +292,7 @@ function RosterTable({
                 <span className="font-semibold">{Math.round(p.rest)}</span>
                 <span className="text-faint"> of {p.gamesLeft} left</span>
                 <div className="text-xs text-faint">{p.playedSoFar} played</div>
+                {fantasy && <div className="text-xs text-muted sm:hidden">value {fmtValue(values[i])}</div>}
               </td>
               <td className="tabular hidden py-3 pr-2 whitespace-nowrap text-muted sm:table-cell sm:pr-3">
                 {p.restLow !== null && p.restHigh !== null ? `${Math.round(p.restLow)}–${Math.round(p.restHigh)}` : '–'}
@@ -257,6 +300,7 @@ function RosterTable({
               <td className="hidden py-3 pr-2 sm:table-cell sm:pr-3">
                 <Availability tier={p.tier} reason={p.noTierReason} safeLow={safeLow} riskyLow={riskyLow} />
               </td>
+              {fantasy && <td className="tabular hidden py-3 pr-2 text-right font-semibold sm:table-cell sm:pr-3">{fmtValue(values[i])}</td>}
               <td className="py-3 pr-3 text-right sm:pr-4">
                 <button
                   onClick={() => onRemove(p.id)}
@@ -269,6 +313,20 @@ function RosterTable({
             </tr>
           ))}
         </tbody>
+        {fantasy && (
+          <tfoot>
+            <tr className="border-t border-line text-sm">
+              <td className="py-3 pr-2 pl-3 text-muted sm:pl-4">
+                Roster value<span className="text-faint"> (rest of season)</span>
+              </td>
+              <td className="tabular py-3 pr-2 font-semibold sm:hidden">{fmtValue(total)}</td>
+              {/* Desktop: under games, likely left and availability. */}
+              <td className="hidden sm:table-cell" colSpan={3} />
+              <td className="tabular hidden py-3 pr-2 text-right font-semibold sm:table-cell sm:pr-3">{fmtValue(total)}</td>
+              <td />
+            </tr>
+          </tfoot>
+        )}
       </table>
     </div>
   )
@@ -517,5 +575,29 @@ function Swaps({
         })}
       </div>
     </section>
+  )
+}
+
+/** Scoring for the value column and for ranking the top players in the risk check. */
+function FormatPicker({ format, onChange }: { format: FantasyFormat; onChange: (f: FantasyFormat) => void }) {
+  return (
+    <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1" role="radiogroup" aria-label="Scoring">
+      <span className="text-xs text-faint">
+        Scoring (<Tip tip={GLOSSARY.cat9}>what's 9-cat?</Tip>)
+      </span>
+      <div className="inline-flex rounded-lg border border-line bg-surface p-0.5">
+        {FORMATS.map((f) => (
+          <button
+            key={f.id}
+            role="radio"
+            aria-checked={format === f.id}
+            onClick={() => onChange(f.id)}
+            className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${format === f.id ? 'bg-accent text-bg' : 'text-muted hover:text-ink'}`}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
+    </div>
   )
 }

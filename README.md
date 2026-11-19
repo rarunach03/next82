@@ -34,6 +34,9 @@ behind "More columns".
   156th-best player per game, roughly the best free agent). Rest-of-season value by default,
   full-season as a second view; ESPN points, Yahoo points and 9-category leagues. Rookies are
   ranked once they've played 5 games.
+- **My roster.** Enter up to 13 players (saved in the browser) to see games left, likely ranges,
+  tiers and value, plus 5,000 simulated rest-of-season outcomes for the roster (bad, typical and
+  good season), plain-English risk flags, and safer players with similar production to swap in.
 - **Accuracy page.** The frozen preseason forecast graded every day against games played so far,
   next to two simple guesses, with an honest "too early to tell" while the gap could be luck.
 - **Injury adjustments.** The NBA's official injury report is read daily. Players listed Out with a
@@ -94,6 +97,7 @@ python -m next82.injury_history  # past injury reports for the model (downloaded
 python -m next82.injury_features # do injury-report features improve the updated forecast?
 python -m next82.export        # write the website's data (web/public/data/)
 pytest                         # tests
+cd web && npm test             # website logic tests (roster simulation, risk flags, swaps)
 ```
 
 The frozen files (`data/processed/preseason_*.parquet`) can't be overwritten; delete them only
@@ -252,6 +256,7 @@ src/next82/
   explain.py       SHAP factors with readable labels
   export.py        the website's data (the only way data reaches the site)
 web/               React site (Vite, TypeScript, Tailwind, Recharts); data in public/data/
+  src/roster/      My roster logic: simulation, risk flags (rules in flags.ts), swap suggestions
 scripts/           refresh.sh (daily update), news_timelines.sh (news search)
 data/, models/     committed: frozen forecasts, current-season data, LightGBM models (text format)
 app/               the original Streamlit app (internal)
