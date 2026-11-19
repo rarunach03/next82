@@ -6,7 +6,8 @@ import Tip from '../components/Tip'
 import { GLOSSARY } from '../glossary'
 import { isInjured, useFantasy } from '../data'
 import { MAX_ROSTER, rosterPool, searchPool, type RosterPlayer } from '../roster/model.ts'
-import { loadSaved, save, type Saved } from '../roster/storage.ts'
+import { simulate, RUNS, type Simulation } from '../roster/simulate.ts'
+import { DEFAULT_SEED, loadSaved, save, type Saved } from '../roster/storage.ts'
 import type { Index } from '../types'
 
 /** Build (or enter) a fantasy roster and see how its availability holds up. Saved in this browser. */
@@ -16,11 +17,14 @@ export default function MyRoster({ index }: { index: Index }) {
   useEffect(() => save(saved), [saved])
 
   const pool = useMemo(() => (fantasy === undefined ? null : rosterPool(index.players, fantasy)), [index, fantasy])
+  // Saved players who left the pool (released, no forecast) are dropped from view but kept in storage.
+  const roster = useMemo(() => {
+    const byId = new Map((pool ?? []).map((p) => [p.id, p]))
+    return saved.ids.map((id) => byId.get(id)).filter((p): p is RosterPlayer => p !== undefined)
+  }, [pool, saved.ids])
+  const sim = useMemo(() => simulate(roster, saved.seed), [roster, saved.seed])
   if (!pool) return <p className="py-16 text-muted">Loading…</p>
 
-  const byId = new Map(pool.map((p) => [p.id, p]))
-  // Saved players who left the pool (released, no forecast) are dropped from view but kept in storage.
-  const roster = saved.ids.map((id) => byId.get(id)).filter((p): p is RosterPlayer => p !== undefined)
   const missing = saved.ids.length - roster.length
   const setIds = (ids: number[]) => setSaved((s) => ({ ...s, ids }))
   const add = (p: RosterPlayer) => saved.ids.length < MAX_ROSTER && setIds([...saved.ids, p.id])
@@ -63,6 +67,10 @@ export default function MyRoster({ index }: { index: Index }) {
           <RosterTable roster={roster} onRemove={remove} safeLow={meta.tierSafeLow} riskyLow={meta.setbackGames} />
         )}
       </section>
+
+      {roster.length > 0 && (
+        <SeasonOutlook sim={sim} size={roster.length} onSeed={(seed) => setSaved((s) => ({ ...s, seed }))} />
+      )}
     </article>
   )
 }
@@ -251,6 +259,148 @@ function RosterTable({
           ))}
         </tbody>
       </table>
+    </div>
+  )
+}
+
+const pct = (games: number, max: number) => (max > 0 ? `${Math.round((games / max) * 100)}%` : '–')
+const whole = (v: number) => Math.round(v).toLocaleString('en-US')
+
+/** Team totals and the simulated rest of the season: bad, typical and good outcomes. */
+function SeasonOutlook({ sim, size, onSeed }: { sim: Simulation; size: number; onSeed: (seed: number) => void }) {
+  return (
+    <section className="mt-8">
+      <h2 className="font-display text-2xl font-bold uppercase">Rest of the season</h2>
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <Stat
+          label="Expected games left"
+          value={whole(sim.mean)}
+          note={`of ${whole(sim.maxRest)} possible (${pct(sim.mean, sim.maxRest)})`}
+          tip={`The average across the simulated seasons below, for your ${size} players. Possible: every team game left for every player.`}
+        />
+        <Stat
+          label="Season total"
+          value={whole(sim.played + sim.mean)}
+          note={`${whole(sim.played)} played so far + expected games left`}
+        />
+      </div>
+      {sim.forecastSum - sim.mean >= 1 && (
+        <p className="mt-2 text-xs text-faint">
+          Adding up each player's forecast gives {whole(sim.forecastSum)}. Each forecast is a player's middle outcome, and
+          an injury takes away more games than good luck can add, so the roster's expected total is lower.
+        </p>
+      )}
+
+      <div className="mt-4 rounded-2xl border border-line bg-surface p-4 sm:p-5">
+        <h3 className="font-semibold">If the season played out {RUNS.toLocaleString('en-US')} times</h3>
+        <p className="mt-1 text-sm text-muted">
+          Each simulated season draws every player's games from their likely range, then adds up the roster.
+        </p>
+        <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+          <Outcome label="Bad season" sub="1 in 10 are worse" games={sim.low} max={sim.maxRest} />
+          <Outcome label="Typical" sub="the middle outcome" games={sim.median} max={sim.maxRest} accent />
+          <Outcome label="Good season" sub="1 in 10 are better" games={sim.high} max={sim.maxRest} />
+        </div>
+        <Histogram sim={sim} />
+        <SeedControl seed={sim.seed} onSeed={onSeed} />
+      </div>
+    </section>
+  )
+}
+
+function Stat({ label, value, note, tip }: { label: string; value: string; note: string; tip?: string }) {
+  return (
+    <div className="rounded-2xl border border-line bg-surface px-4 py-4">
+      <div className="text-sm text-muted">{tip ? <Tip tip={tip}>{label}</Tip> : label}</div>
+      <div className="tabular mt-1 font-display text-4xl font-bold">{value}</div>
+      <div className="mt-1 text-xs text-faint">{note}</div>
+    </div>
+  )
+}
+
+function Outcome({ label, sub, games, max, accent = false }: { label: string; sub: string; games: number; max: number; accent?: boolean }) {
+  return (
+    <div className="rounded-xl bg-surface-2 px-2 py-3">
+      <div className="text-xs font-medium text-muted">{label}</div>
+      <div className={`tabular mt-1 font-display text-3xl font-bold ${accent ? 'text-accent' : ''}`}>{whole(games)}</div>
+      <div className="tabular text-xs text-muted">{pct(games, max)} of possible</div>
+      <div className="mt-0.5 hidden text-[11px] text-faint sm:block">{sub}</div>
+    </div>
+  )
+}
+
+/** Simulated roster games left, binned. The bar holding the typical outcome is highlighted. */
+function Histogram({ sim }: { sim: Simulation }) {
+  const [hover, setHover] = useState<number | null>(null)
+  const top = Math.max(...sim.bins.map((b) => b.count), 1)
+  const label = (b: { from: number; to: number }) => (b.from === b.to ? whole(b.from) : `${whole(b.from)}–${whole(b.to)}`)
+  const shown = hover !== null ? sim.bins[hover] : null
+  if (sim.bins.length < 2) return null
+  return (
+    <figure className="mt-5">
+      <figcaption className="flex justify-between gap-3 text-xs text-faint">
+        <span>Simulated seasons by roster games left</span>
+        <span className="tabular text-muted" aria-live="polite">
+          {shown ? `${label(shown)} games: ${pct(shown.count, sim.runs)} of seasons` : ''}
+        </span>
+      </figcaption>
+      <div className="mt-2 flex h-28 items-end gap-0.5" onPointerLeave={() => setHover(null)}>
+        {sim.bins.map((b, i) => {
+          const typical = b.from <= sim.median && sim.median <= b.to
+          return (
+            <div
+              key={b.from}
+              role="img"
+              aria-label={`${label(b)} games: ${pct(b.count, sim.runs)} of simulated seasons`}
+              onPointerEnter={() => setHover(i)}
+              className="flex h-full flex-1 items-end"
+            >
+              <div
+                className={`w-full rounded-t ${typical ? 'bg-accent' : hover === i ? 'bg-ink/50' : 'bg-ink/25'}`}
+                style={{ height: `${(b.count / top) * 100}%`, minHeight: b.count ? 2 : 0 }}
+              />
+            </div>
+          )
+        })}
+      </div>
+      <div className="tabular mt-1 flex justify-between border-t border-line pt-1 text-xs text-faint">
+        <span>{whole(sim.bins[0].from)}</span>
+        <span>{whole(sim.bins[sim.bins.length - 1].to)} games</span>
+      </div>
+    </figure>
+  )
+}
+
+/** The simulation's seed: the same seed and roster always give the same numbers. */
+function SeedControl({ seed, onSeed }: { seed: number; onSeed: (seed: number) => void }) {
+  return (
+    <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-faint">
+      <label className="flex items-center gap-2">
+        <Tip tip="The simulation uses this seed, so the same roster always shows the same numbers. Change it to see how much they move from one set of simulations to another.">
+          Seed
+        </Tip>
+        <input
+          type="number"
+          inputMode="numeric"
+          value={seed}
+          onChange={(e) => {
+            const v = Number.parseInt(e.target.value, 10)
+            if (Number.isInteger(v) && v >= 0) onSeed(v)
+          }}
+          className="tabular w-24 rounded-md border border-line bg-surface-2 px-2 py-1 text-sm text-ink outline-none focus:border-accent"
+        />
+      </label>
+      <button
+        onClick={() => onSeed(Math.floor(Math.random() * 1_000_000))}
+        className="rounded-md border border-line px-2 py-1 text-muted transition hover:text-ink"
+      >
+        New seed
+      </button>
+      {seed !== DEFAULT_SEED && (
+        <button onClick={() => onSeed(DEFAULT_SEED)} className="rounded-md px-2 py-1 text-muted transition hover:text-ink">
+          Reset to {DEFAULT_SEED}
+        </button>
+      )}
     </div>
   )
 }
