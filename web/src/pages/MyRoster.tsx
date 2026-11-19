@@ -5,6 +5,7 @@ import InjuredBadge from '../components/InjuredBadge'
 import Tip from '../components/Tip'
 import { GLOSSARY } from '../glossary'
 import { isInjured, useFantasy } from '../data'
+import { rosterFlags, RULES, type Flag } from '../roster/flags.ts'
 import { MAX_ROSTER, rosterPool, searchPool, type RosterPlayer } from '../roster/model.ts'
 import { simulate, RUNS, type Simulation } from '../roster/simulate.ts'
 import { DEFAULT_SEED, loadSaved, save, type Saved } from '../roster/storage.ts'
@@ -23,6 +24,7 @@ export default function MyRoster({ index }: { index: Index }) {
     return saved.ids.map((id) => byId.get(id)).filter((p): p is RosterPlayer => p !== undefined)
   }, [pool, saved.ids])
   const sim = useMemo(() => simulate(roster, saved.seed), [roster, saved.seed])
+  const flags = useMemo(() => rosterFlags(roster, sim, (p) => p.perGame?.espn ?? null), [roster, sim])
   if (!pool) return <p className="py-16 text-muted">Loading…</p>
 
   const missing = saved.ids.length - roster.length
@@ -67,6 +69,8 @@ export default function MyRoster({ index }: { index: Index }) {
           <RosterTable roster={roster} onRemove={remove} safeLow={meta.tierSafeLow} riskyLow={meta.setbackGames} />
         )}
       </section>
+
+      {roster.length > 0 && <Flags flags={flags} />}
 
       {roster.length > 0 && (
         <SeasonOutlook sim={sim} size={roster.length} onSeed={(seed) => setSaved((s) => ({ ...s, seed }))} />
@@ -402,5 +406,32 @@ function SeedControl({ seed, onSeed }: { seed: number; onSeed: (seed: number) =>
         </button>
       )}
     </div>
+  )
+}
+
+/** Plain-English warnings (rules in roster/flags.ts), or a short all-clear. */
+function Flags({ flags }: { flags: Flag[] }) {
+  return (
+    <section className="mt-8">
+      <h2 className="font-display text-2xl font-bold uppercase">Risk check</h2>
+      {flags.length === 0 ? (
+        <p className="mt-3 rounded-2xl border border-line bg-surface px-4 py-3 text-sm text-muted">
+          <span className="font-semibold text-safe">No red flags.</span> Your top players aren't high-risk, no more than one
+          player is injured, and even a bad season keeps {Math.round(RULES.badSeasonShareMax * 100)}%+ of possible games.
+        </p>
+      ) : (
+        <ul className="mt-3 space-y-2">
+          {flags.map((f) => (
+            <li key={f.id} className="flex gap-3 rounded-2xl border border-moderate/40 bg-moderate/5 px-4 py-3 text-sm">
+              <span aria-hidden className="font-bold text-moderate">!</span>
+              <span>
+                <span className="sr-only">Warning: </span>
+                {f.text}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   )
 }

@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import type { Fantasy, Index, OutInfo, Override, PlayerDetail, PlayerSummary, SeasonAccuracy } from './types'
 
 /** Where the site is served from: "/" locally, "/next82/" on GitHub Pages. */
-const BASE = import.meta.env.BASE_URL
+// (import.meta.env is undefined under `node --test`, which imports the helpers below.)
+const BASE = import.meta.env?.BASE_URL ?? '/'
 
 let indexPromise: Promise<Index> | null = null
 
