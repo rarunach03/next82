@@ -56,6 +56,13 @@ short hover explanations, and the header shows how recent the data is. Old addre
   from cited recovery studies. Every 3 days an automatic news search (Claude Code, restricted to web
   search and one file) looks for team-announced timelines, which override the estimate; manual
   adjustments cover the rest. Each is labeled on the site with its sources.
+- **Game by game (beta).** The chance each player plays each of their team's next games, from a
+  second model (`game_level.py`) trained on every player-game since 2000-01, calibrated on
+  2023-24 and tested on 2024-25 and 2025-26 (log loss 0.385 vs. 0.511 and 0.745 for two simple
+  play-rate guesses; calibration error 0.012). The live injury report overrides it (Out, or before
+  an expected return: under 5%). Player pages show the next five games and My Roster this week's
+  expected games. Shown only while `config.GAME_LEVEL_BETA` is on and every quality gate in
+  `models/game_level_metrics.json` passes; if the daily step fails, the site hides it.
 - **Back-to-backs.** On player pages: how many each team has left and each player's chance of
   sitting the second night.
 
@@ -105,6 +112,7 @@ python -m next82.back_to_back  # back-to-back rest rates and their validation
 python -m next82.auto_overrides  # each player's last game before the season (for injury start dates)
 python -m next82.injury_history  # past injury reports for the model (downloaded once, cached)
 python -m next82.injury_features # do injury-report features improve the updated forecast?
+python -m next82.game_level    # game-by-game beta: player-game rows, model, quality gates
 python -m next82.export        # write the website's data (web/public/data/)
 pytest                         # tests
 cd web && npm test             # website logic tests (roster, trades, views, menus, redirects)

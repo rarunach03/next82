@@ -19,6 +19,9 @@ date, his team's results before it, and the schedule (known in advance). The inj
 report is not an input (there's no history of it for training); on the site, a live
 "Out" listing or an expected return date overrides the model (`apply_injury_status`).
 
+Past seasons' "schedule" is the games actually played, so in 2019-20 (a training season)
+games left reflect the COVID-shortened season; no test or calibration season is affected.
+
 Seasons match the in-season model: train up to 2022-23, calibrate on 2023-24 (isotonic),
 test on 2024-25 and 2025-26. The preseason model's 15.6-game average miss is measured
 on the same two seasons.
