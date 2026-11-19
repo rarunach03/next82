@@ -81,14 +81,15 @@ def test_fantasy_file(out):
     index = json.loads((out / "index.json").read_text())
     ranked = {p["id"] for p in fantasy["players"]}
     by_id = {p["id"]: p for p in index["players"]}
-    # Ranked players all have an updated forecast; games line up with it.
+    # Ranked players all have an updated forecast; games line up with it. Rookies have
+    # no preseason forecast, so they're only in fantasy.json.
     for p in fantasy["players"]:
-        assert by_id[p["id"]]["updated"] is not None
+        assert p["rookie"] or by_id[p["id"]]["updated"] is not None
         assert 0 <= p["restGames"] <= p["gamesLeft"]
         if p["restLow"] is not None:  # trade analyzer ranges
             assert p["restLow"] - 0.11 <= p["restGames"] <= p["restHigh"] + 0.11
     # Players with a preseason forecast but no updated one (unsigned, no games) aren't ranked.
-    assert not any(by_id[i]["updated"] is None for i in ranked)
+    assert not any(by_id[i]["updated"] is None for i in ranked if i in by_id)
 
 
 def test_accuracy_file(out):
@@ -131,3 +132,18 @@ def test_stash_info(out):
     for p in fantasy["players"]:
         if p["override"]:
             assert p["out"] and p["out"]["reason"] == p["override"]["kind"]
+
+
+def test_positions_are_listed_positions(out):
+    """Index and fantasy rows carry the listed position (or None if it wasn't downloaded)."""
+    from next82 import data
+
+    allowed = {None, "G", "F", "C", "G-F", "F-G", "F-C", "C-F"}
+    index = json.loads((out / "index.json").read_text())
+    assert all(p["position"] in allowed for p in index["players"])
+    fantasy_path = out / "fantasy.json"
+    if fantasy_path.exists():
+        assert all(p["position"] in allowed for p in json.loads(fantasy_path.read_text())["players"])
+    if not data.saved_positions().empty:
+        rostered = [p for p in index["players"] if p["team"]]
+        assert sum(p["position"] is not None for p in rostered) >= 0.95 * len(rostered)

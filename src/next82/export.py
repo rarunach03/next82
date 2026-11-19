@@ -207,6 +207,12 @@ def write_accuracy(rosters: pd.DataFrame | None):
         write_json(OUT_DIR / "accuracy.json", graded)
 
 
+def position_or_none(positions: pd.Series, pid) -> str | None:
+    """Listed position ('G', 'F-C', ...), or None if the player isn't in the download."""
+    value = positions.get(int(pid))
+    return str(value) if isinstance(value, str) else None
+
+
 def write_fantasy(forecasts: pd.DataFrame, target: str, rosters: pd.DataFrame | None):
     """fantasy.json: per-game production and forecast games for ranked players.
 
@@ -234,6 +240,7 @@ def write_fantasy(forecasts: pd.DataFrame, target: str, rosters: pd.DataFrame | 
     rows = pd.concat([veterans[cols], rookie_rows[cols]] if not rookie_rows.empty else [veterans[cols]])
     rows = rows.join(fantasy.score(rows[fantasy.STATS])[["espn", "yahoo", *[f"z_{c}" for c in [*fantasy.CATEGORIES, "total"]]]])
 
+    positions = data.saved_positions(target)
     k = json.loads(fantasy.METRICS_PATH.read_text())["shrink_k"]
     rookie_k = json.loads(rookies.METRICS_PATH.read_text())["shrink_k"] if rookies.METRICS_PATH.exists() else None
     replacement = fantasy.replacement_levels(rows.rename(columns={"z_total": "cat9"}))
@@ -243,6 +250,7 @@ def write_fantasy(forecasts: pd.DataFrame, target: str, rosters: pd.DataFrame | 
             "id": int(pid),
             "name": r.PLAYER_NAME,
             "team": r.team if pd.notna(r.team) else None,
+            "position": position_or_none(positions, pid),
             "tier": r.tier if isinstance(r.tier, str) else None,
             "noTierReason": r.no_tier_reason if isinstance(r.no_tier_reason, str) else None,
             "rookie": bool(r.rookie),
@@ -401,6 +409,7 @@ def main():
     forecasts["recent_minutes"] = (recent_mpg * forecasts.last_played_gp_share * GAMES).fillna(0)
     forecasts = forecasts.sort_values("shown", ascending=False)
 
+    positions = data.saved_positions(target)
     players = []
     if (OUT_DIR / "players").exists():
         shutil.rmtree(OUT_DIR / "players")
@@ -412,6 +421,7 @@ def main():
             "search": plain(r.PLAYER_NAME),
             "team": r.TEAM_ABBREVIATION_NOW if pd.notna(r.TEAM_ABBREVIATION_NOW) else None,
             "lastTeam": r.TEAM_ABBREVIATION,
+            "position": position_or_none(positions, r.PLAYER_ID),
             "age": int(r.age),
             "games": int(r.GP),
             "seasonGames": int(r.season_games),

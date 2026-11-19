@@ -64,3 +64,15 @@ def test_stale_rosters_refresh_in_background_and_survive_failure(tmp_path, monke
     assert calls  # the refresh was attempted off the calling thread
     assert data.saved_rosters().TEAM_ABBREVIATION.tolist() == ["IND"]  # saved copy kept
     assert data.refresh_rosters_in_background() is not None  # lock released after failure
+
+
+def test_position_frame_keeps_listed_positions():
+    import pandas as pd
+
+    from next82.data import position_frame
+
+    raw = pd.DataFrame({"PERSON_ID": [1, 2, 3, 3], "POSITION": ["G", " F-C ", "", "C"]})
+    out = position_frame(raw)
+    assert out.PLAYER_ID.tolist() == [1, 2, 3]
+    assert out.POSITION.tolist()[:2] == ["G", "F-C"]
+    assert pd.isna(out.POSITION.iloc[2])

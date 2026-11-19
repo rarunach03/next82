@@ -6,6 +6,7 @@ import About from './pages/About'
 import Accuracy from './pages/Accuracy'
 import Home from './pages/Home'
 import Injured from './pages/Injured'
+import MyRoster from './pages/MyRoster'
 import Rankings from './pages/Rankings'
 import Stash from './pages/Stash'
 import Trade from './pages/Trade'
@@ -54,6 +55,7 @@ function Shell() {
               label="Fantasy"
               pathname={pathname}
               items={[
+                { to: '/roster', label: 'My roster' },
                 { to: '/rankings', label: 'Rankings' },
                 { to: '/trade', label: 'Trade analyzer' },
                 { to: '/stash', label: 'Who to stash' },
@@ -90,6 +92,7 @@ function Shell() {
               />
               <Route path="/injured" element={<Injured index={index} />} />
               <Route path="/rankings" element={<Rankings meta={index.meta} teams={index.teams} />} />
+              <Route path="/roster" element={<MyRoster index={index} />} />
               <Route path="/trade" element={<Trade />} />
               <Route path="/stash" element={<Stash />} />
               <Route path="/accuracy" element={<Accuracy meta={index.meta} />} />

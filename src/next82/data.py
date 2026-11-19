@@ -20,6 +20,7 @@ import pandas as pd
 from nba_api.stats.endpoints import (
     commonallplayers,
     drafthistory,
+    playerindex,
     scheduleleaguev2,
     leaguedashplayerbiostats,
     leaguedashplayerstats,
@@ -147,6 +148,32 @@ def fetch_current_rosters(season: str = config.FORECAST_SEASON) -> pd.DataFrame:
     out.to_parquet(tmp, index=False)
     tmp.replace(path)
     return out
+
+
+def positions_path(season: str = config.FORECAST_SEASON):
+    return config.RAW_DIR / "current_season" / f"positions_{season}.parquet"
+
+
+def position_frame(raw: pd.DataFrame) -> pd.DataFrame:
+    """PLAYER_ID and listed position ('G', 'F', 'C', or two like 'G-F'; None if blank)."""
+    position = raw.POSITION.astype("string").str.strip().replace("", pd.NA)
+    return pd.DataFrame({"PLAYER_ID": raw.PERSON_ID.astype(int), "POSITION": position}).drop_duplicates("PLAYER_ID")
+
+
+def fetch_positions(season: str = config.FORECAST_SEASON) -> pd.DataFrame:
+    """Every current player's listed position, saved to data/raw."""
+    raw = playerindex.PlayerIndex(season=season, league_id="00", timeout=TIMEOUT).get_data_frames()[0]
+    out = position_frame(raw)
+    _write(out, positions_path(season))
+    return out
+
+
+def saved_positions(season: str = config.FORECAST_SEASON) -> pd.Series:
+    """Position by PLAYER_ID from the last download (empty if never downloaded)."""
+    path = positions_path(season)
+    if not path.exists():
+        return pd.Series(dtype="string")
+    return pd.read_parquet(path).set_index("PLAYER_ID").POSITION
 
 
 def season_to_date_paths(season: str = config.FORECAST_SEASON):
@@ -334,6 +361,9 @@ def refresh_current(season: str = config.FORECAST_SEASON):
     time.sleep(config.REQUEST_DELAY)
     draft = fetch_draft(season)
     print(f"Draft {season[:4]}: {len(draft)} picks")
+    time.sleep(config.REQUEST_DELAY)
+    positions = fetch_positions(season)
+    print(f"Positions: {positions.POSITION.notna().sum()} players")
     time.sleep(config.REQUEST_DELAY)
     schedule = fetch_schedule(season)
     print(f"Schedule: {schedule.GAME_ID.nunique()} games with both teams set")

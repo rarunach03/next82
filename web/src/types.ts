@@ -89,6 +89,8 @@ export interface PlayerSummary {
   /** Current team, or null if not on a roster. */
   team: string | null
   lastTeam: string
+  /** Listed position ('G', 'F', 'C' or two like 'G-F'); missing in files exported before positions. */
+  position?: string | null
   age: number
   games: number
   seasonGames: number
@@ -174,6 +176,7 @@ export interface FantasyPlayer {
   id: number
   name: string
   team: string | null
+  position?: string | null
   tier: Tier | null
   noTierReason: NoTierReason | null
   /** In their first NBA season: ranked from this season's games plus a draft-range baseline. */
