@@ -119,3 +119,8 @@ export function searchPool(pool: RosterPlayer[], query: string, exclude: Set<num
 export function restValue(p: RosterPlayer, format: FantasyFormat, replacement: number): number | null {
   return p.perGame ? (p.perGame[format] - replacement) * p.rest : null
 }
+
+/** "LAL · F-C", "LAL" (no position yet), or the position alone. */
+export function teamPosition(p: RosterPlayer): string {
+  return [p.team, p.position].filter(Boolean).join(' · ')
+}

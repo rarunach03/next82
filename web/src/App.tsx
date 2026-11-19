@@ -7,7 +7,6 @@ import Accuracy from './pages/Accuracy'
 import Home from './pages/Home'
 import MyRoster from './pages/MyRoster'
 import Rankings from './pages/Rankings'
-import Trade from './pages/Trade'
 import { LEGACY_PATHS, legacyRedirect } from './redirects'
 
 // The player page carries the chart library, so it loads only when first opened.
@@ -56,7 +55,6 @@ function Shell() {
               items={[
                 { to: '/roster', label: 'My roster' },
                 { to: '/rankings', label: 'Rankings' },
-                { to: '/trade', label: 'Trade analyzer' },
                 { to: '/?view=stash', label: 'Who to stash' },
               ]}
             />
@@ -91,7 +89,6 @@ function Shell() {
               />
               <Route path="/rankings" element={<Rankings meta={index.meta} teams={index.teams} />} />
               <Route path="/roster" element={<MyRoster index={index} />} />
-              <Route path="/trade" element={<Trade />} />
               <Route path="/accuracy" element={<Accuracy meta={index.meta} />} />
               <Route path="/about" element={<About meta={index.meta} />} />
               {LEGACY_PATHS.map((path) => (

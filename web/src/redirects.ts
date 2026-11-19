@@ -1,5 +1,6 @@
 // Old addresses from before the site was reorganized, sent to where their content
 // lives now, so shared links keep working.
+import { tradeParam } from './roster/trade.ts'
 
 /** Where an old address now lives (path, query and hash), or null if it isn't an old address. */
 export function legacyRedirect(pathname: string, search: string): string | null {
@@ -19,10 +20,15 @@ export function legacyRedirect(pathname: string, search: string): string | null 
       return `/?${keep(['team'], { view: 'injured' })}`
     case '/stash':
       return `/?${keep(['team', 'format'], { view: 'stash' })}`
+    case '/trade': {
+      // The trade analyzer's sides (?a=give&b=get) become a trade on My Roster.
+      const side = (name: string) => (params.get(name) ?? '').split(',').map(Number).filter((n) => Number.isInteger(n) && n > 0)
+      return `/roster?${keep(['format'], { trade: tradeParam({ give: side('a'), get: side('b') }) })}`
+    }
     default:
       return null
   }
 }
 
 /** Old addresses that redirect (for the router). */
-export const LEGACY_PATHS = ['/injured', '/stash']
+export const LEGACY_PATHS = ['/injured', '/stash', '/trade']

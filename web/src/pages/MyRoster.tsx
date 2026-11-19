@@ -1,28 +1,29 @@
-import { useEffect, useId, useMemo, useState } from 'react'
-import { Link } from 'react-router'
+import { useEffect, useMemo, useState } from 'react'
+import { Link, useSearchParams } from 'react-router'
 import Availability from '../components/Availability'
 import InjuredBadge from '../components/InjuredBadge'
+import RosterPicker from '../components/RosterPicker'
+import ScoringPicker from '../components/ScoringPicker'
 import Tip from '../components/Tip'
 import { GLOSSARY } from '../glossary'
-import { isInjured, useFantasy } from '../data'
+import { isInjured, parseFormat, useFantasy } from '../data'
 import { isHighRisk, rosterFlags, RULES, type Flag } from '../roster/flags.ts'
-import { MAX_ROSTER, restValue, rosterPool, searchPool, type RosterPlayer } from '../roster/model.ts'
+import { MAX_ROSTER, restValue, rosterPool, teamPosition, type RosterPlayer } from '../roster/model.ts'
 import { simulate, RUNS, type Simulation } from '../roster/simulate.ts'
 import { swapSuggestions } from '../roster/swaps.ts'
 import { DEFAULT_SEED, loadSaved, save, type Saved } from '../roster/storage.ts'
+import { parseTrade, rosterAfter, tradeParam, type Trade } from '../roster/trade.ts'
+import TradePanel from '../components/TradePanel'
 import type { Fantasy, FantasyFormat, Index } from '../types'
-
-const FORMATS: { id: FantasyFormat; label: string }[] = [
-  { id: 'espn', label: 'ESPN points' },
-  { id: 'yahoo', label: 'Yahoo points' },
-  { id: 'cat9', label: '9-cat' },
-]
 
 /** Build (or enter) a fantasy roster and see how its availability holds up. Saved in this browser. */
 export default function MyRoster({ index }: { index: Index }) {
   const fantasy = useFantasy()
   const [saved, setSaved] = useState<Saved>(loadSaved)
-  const [format, setFormat] = useState<FantasyFormat>('espn')
+  // Scoring and the trade being tested live in the URL, so a trade can be shared.
+  const [params, setParams] = useSearchParams()
+  const format = parseFormat(params.get('format'))
+  const trade = parseTrade(params.get('trade'))
   useEffect(() => save(saved), [saved])
 
   const pool = useMemo(() => (fantasy === undefined ? null : rosterPool(index.players, fantasy)), [index, fantasy])
@@ -33,6 +34,18 @@ export default function MyRoster({ index }: { index: Index }) {
   }, [pool, saved.ids])
   const sim = useMemo(() => simulate(roster, saved.seed), [roster, saved.seed])
   const flags = useMemo(() => rosterFlags(roster, sim, (p) => p.perGame?.[format] ?? null), [roster, sim, format])
+  // The same checks for the roster as it would be after the trade.
+  const tradeKey = trade ? tradeParam(trade) : null
+  const after = useMemo(() => {
+    const t = parseTrade(tradeKey)
+    if (!t || !pool) return null
+    const byId = new Map(pool.map((p) => [p.id, p]))
+    const players = rosterAfter(roster.map((p) => p.id), t)
+      .map((id) => byId.get(id))
+      .filter((p): p is RosterPlayer => p !== undefined)
+    const afterSim = simulate(players, saved.seed)
+    return { players, sim: afterSim, flags: rosterFlags(players, afterSim, (p) => p.perGame?.[format] ?? null) }
+  }, [tradeKey, pool, roster, saved.seed, format])
   if (!pool) return <p className="py-16 text-muted">Loading…</p>
 
   const missing = saved.ids.length - roster.length
@@ -42,6 +55,19 @@ export default function MyRoster({ index }: { index: Index }) {
   // A swap keeps the roster's order: the new player takes the old one's place.
   const swap = (out: number, inId: number) => setIds(saved.ids.map((i) => (i === out ? inId : i)))
   const { meta } = index
+  function setParam(key: string, value: string | null) {
+    setParams(
+      (current) => {
+        const next = new URLSearchParams(current)
+        if (value === null) next.delete(key)
+        else next.set(key, value)
+        return next
+      },
+      { replace: true },
+    )
+  }
+  const setFormat = (f: FantasyFormat) => setParam('format', f === 'espn' ? null : f)
+  const setTrade = (t: Trade | null) => setParam('trade', t ? tradeParam(t) : null)
 
   return (
     <article className="pt-10 pb-16">
@@ -60,7 +86,7 @@ export default function MyRoster({ index }: { index: Index }) {
           </span>
         </div>
         <div className="mt-3">
-          <Picker pool={pool} taken={new Set(saved.ids)} full={saved.ids.length >= MAX_ROSTER} onAdd={add} />
+          <RosterPicker pool={pool} taken={new Set(saved.ids)} full={saved.ids.length >= MAX_ROSTER} onAdd={add} />
         </div>
         {missing > 0 && (
           <p className="mt-2 text-xs text-faint">
@@ -77,7 +103,11 @@ export default function MyRoster({ index }: { index: Index }) {
           </p>
         ) : (
           <>
-            {fantasy && <FormatPicker format={format} onChange={setFormat} />}
+            {fantasy && (
+              <div className="mt-4">
+                <ScoringPicker format={format} onChange={setFormat} />
+              </div>
+            )}
             <RosterTable
               roster={roster}
               onRemove={remove}
@@ -88,7 +118,32 @@ export default function MyRoster({ index }: { index: Index }) {
             />
           </>
         )}
+        {!trade && fantasy && (
+          <button
+            onClick={() => setTrade({ give: [], get: [] })}
+            className="mt-3 rounded-lg border border-line px-3 py-2 text-sm font-medium text-muted transition hover:border-accent hover:text-accent"
+          >
+            Test a trade
+          </button>
+        )}
       </section>
+
+      {trade && fantasy && after && (
+        <TradePanel
+          trade={trade}
+          onChange={setTrade}
+          onApply={() => {
+            setIds(after.players.map((p) => p.id))
+            setTrade(null)
+          }}
+          roster={roster}
+          pool={pool}
+          fantasy={fantasy}
+          format={format}
+          before={{ sim, flags }}
+          after={after}
+        />
+      )}
 
       {roster.length > 0 && <Flags flags={flags} />}
 
@@ -111,105 +166,6 @@ export default function MyRoster({ index }: { index: Index }) {
       </p>
     </article>
   )
-}
-
-/** Search to add a player. Arrow keys move, Enter adds, Escape closes. */
-function Picker({
-  pool,
-  taken,
-  full,
-  onAdd,
-}: {
-  pool: RosterPlayer[]
-  taken: Set<number>
-  full: boolean
-  onAdd: (p: RosterPlayer) => void
-}) {
-  const listId = useId()
-  const [query, setQuery] = useState('')
-  const [open, setOpen] = useState(false)
-  const [active, setActive] = useState(0)
-  const results = useMemo(() => searchPool(pool, query, taken), [pool, query, taken])
-  const showList = open && query.trim() !== ''
-
-  function choose(p: RosterPlayer) {
-    onAdd(p)
-    setQuery('')
-    setActive(0)
-  }
-
-  function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
-    if (e.key === 'ArrowDown') {
-      e.preventDefault()
-      setOpen(true)
-      setActive((i) => Math.min(i + 1, results.length - 1))
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault()
-      setActive((i) => Math.max(i - 1, 0))
-    } else if (e.key === 'Enter' && results[active]) {
-      e.preventDefault()
-      choose(results[active])
-    } else if (e.key === 'Escape') {
-      setOpen(false)
-    }
-  }
-
-  return (
-    <div className="relative">
-      <input
-        role="combobox"
-        aria-expanded={showList}
-        aria-controls={listId}
-        aria-autocomplete="list"
-        aria-activedescendant={showList && results[active] ? `${listId}-${active}` : undefined}
-        aria-label="Add a player"
-        disabled={full}
-        value={query}
-        placeholder={full ? `Roster full (${MAX_ROSTER} players)` : 'Add a player by name'}
-        onChange={(e) => {
-          setQuery(e.target.value)
-          setActive(0)
-          setOpen(true)
-        }}
-        onFocus={() => setOpen(true)}
-        onBlur={() => setTimeout(() => setOpen(false), 120)}
-        onKeyDown={onKeyDown}
-        className="w-full rounded-xl border border-line bg-surface px-4 py-3 text-ink placeholder:text-faint outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/30 disabled:opacity-60"
-      />
-      {showList && (
-        <ul
-          id={listId}
-          role="listbox"
-          className="absolute z-20 mt-2 w-full overflow-hidden rounded-xl border border-line bg-surface-2 shadow-2xl shadow-black/50"
-        >
-          {results.length === 0 && <li className="px-4 py-3 text-sm text-muted">No players found</li>}
-          {results.map((p, i) => (
-            <li
-              key={p.id}
-              id={`${listId}-${i}`}
-              role="option"
-              aria-selected={i === active}
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => choose(p)}
-              onMouseEnter={() => setActive(i)}
-              className={`flex cursor-pointer items-center justify-between gap-3 px-4 py-2.5 ${i === active ? 'bg-line' : ''}`}
-            >
-              <span className="min-w-0 truncate">
-                <span className="font-medium">{p.name}</span>
-                <span className="ml-2 text-sm text-faint">{teamPosition(p)}</span>
-              </span>
-              <span className="tabular shrink-0 text-sm text-muted">{Math.round(p.rest)} games left</span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  )
-}
-
-/** "LAL · F-C", "LAL" (no position yet), or the position alone. */
-function teamPosition(p: RosterPlayer): string {
-  return [p.team, p.position].filter(Boolean).join(' · ')
 }
 
 function RosterTable({
@@ -578,26 +534,3 @@ function Swaps({
   )
 }
 
-/** Scoring for the value column and for ranking the top players in the risk check. */
-function FormatPicker({ format, onChange }: { format: FantasyFormat; onChange: (f: FantasyFormat) => void }) {
-  return (
-    <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1" role="radiogroup" aria-label="Scoring">
-      <span className="text-xs text-faint">
-        Scoring (<Tip tip={GLOSSARY.cat9}>what's 9-cat?</Tip>)
-      </span>
-      <div className="inline-flex rounded-lg border border-line bg-surface p-0.5">
-        {FORMATS.map((f) => (
-          <button
-            key={f.id}
-            role="radio"
-            aria-checked={format === f.id}
-            onClick={() => onChange(f.id)}
-            className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${format === f.id ? 'bg-accent text-bg' : 'text-muted hover:text-ink'}`}
-          >
-            {f.label}
-          </button>
-        ))}
-      </div>
-    </div>
-  )
-}
