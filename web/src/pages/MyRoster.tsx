@@ -5,9 +5,10 @@ import InjuredBadge from '../components/InjuredBadge'
 import Tip from '../components/Tip'
 import { GLOSSARY } from '../glossary'
 import { isInjured, useFantasy } from '../data'
-import { rosterFlags, RULES, type Flag } from '../roster/flags.ts'
+import { isHighRisk, rosterFlags, RULES, type Flag } from '../roster/flags.ts'
 import { MAX_ROSTER, rosterPool, searchPool, type RosterPlayer } from '../roster/model.ts'
 import { simulate, RUNS, type Simulation } from '../roster/simulate.ts'
+import { swapSuggestions } from '../roster/swaps.ts'
 import { DEFAULT_SEED, loadSaved, save, type Saved } from '../roster/storage.ts'
 import type { Index } from '../types'
 
@@ -31,6 +32,8 @@ export default function MyRoster({ index }: { index: Index }) {
   const setIds = (ids: number[]) => setSaved((s) => ({ ...s, ids }))
   const add = (p: RosterPlayer) => saved.ids.length < MAX_ROSTER && setIds([...saved.ids, p.id])
   const remove = (id: number) => setIds(saved.ids.filter((i) => i !== id))
+  // A swap keeps the roster's order: the new player takes the old one's place.
+  const swap = (out: number, inId: number) => setIds(saved.ids.map((i) => (i === out ? inId : i)))
   const { meta } = index
 
   return (
@@ -74,6 +77,10 @@ export default function MyRoster({ index }: { index: Index }) {
 
       {roster.length > 0 && (
         <SeasonOutlook sim={sim} size={roster.length} onSeed={(seed) => setSaved((s) => ({ ...s, seed }))} />
+      )}
+
+      {roster.some(isHighRisk) && (
+        <Swaps roster={roster} pool={pool} onSwap={swap} safeLow={meta.tierSafeLow} riskyLow={meta.setbackGames} />
       )}
     </article>
   )
@@ -432,6 +439,83 @@ function Flags({ flags }: { flags: Flag[] }) {
           ))}
         </ul>
       )}
+    </section>
+  )
+}
+
+/** For each high-risk player: up to three similar players per game with a safer forecast. */
+function Swaps({
+  roster,
+  pool,
+  onSwap,
+  safeLow,
+  riskyLow,
+}: {
+  roster: RosterPlayer[]
+  pool: RosterPlayer[]
+  onSwap: (out: number, inId: number) => void
+  safeLow: number
+  riskyLow: number
+}) {
+  const taken = new Set(roster.map((p) => p.id))
+  return (
+    <section className="mt-8">
+      <h2 className="font-display text-2xl font-bold uppercase">Safer swaps</h2>
+      <p className="mt-1 max-w-2xl text-sm text-muted">
+        For each high-risk player: players with similar production per game (minutes, points, rebounds, assists,
+        steals, blocks, threes and turnovers) at a shared position, in a safer tier and expected to play more games.
+      </p>
+      <div className="mt-3 space-y-3">
+        {roster.filter(isHighRisk).map((p) => {
+          const swaps = swapSuggestions(p, pool, taken)
+          return (
+            <div key={p.id} className="rounded-2xl border border-line bg-surface p-4">
+              <div className="text-sm">
+                Instead of <span className="font-semibold">{p.name}</span>{' '}
+                <span className="tabular text-faint">
+                  ({Math.round(p.rest)} of {p.gamesLeft} games left)
+                </span>
+              </div>
+              {swaps.length === 0 ? (
+                <p className="mt-2 text-sm text-faint">No similar player with a safer forecast.</p>
+              ) : (
+                <ul className="mt-2 divide-y divide-line">
+                  {swaps.map(({ player: c }) => (
+                    <li key={c.id} className="flex items-center justify-between gap-3 py-2.5">
+                      <div className="min-w-0">
+                        <div className="truncate">
+                          <Link to={`/player/${c.id}`} className="font-medium hover:text-accent">
+                            {c.name}
+                          </Link>
+                          <span className="ml-2 text-xs text-faint">{teamPosition(c)}</span>
+                        </div>
+                        <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
+                          <Availability tier={c.tier} reason={c.noTierReason} safeLow={safeLow} riskyLow={riskyLow} />
+                          <span className="tabular">
+                            {Math.round(c.rest)} of {c.gamesLeft} left
+                          </span>
+                          {c.stats?.PTS != null && (
+                            <span className="tabular text-faint">
+                              {c.stats.PTS} pts · {c.stats.REB} reb · {c.stats.AST} ast
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => onSwap(p.id, c.id)}
+                        aria-label={`Swap ${c.name} in for ${p.name}`}
+                        className="shrink-0 rounded-lg border border-line px-3 py-1.5 text-sm font-medium text-muted transition hover:border-accent hover:text-accent"
+                      >
+                        Swap in
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )
+        })}
+      </div>
     </section>
   )
 }
