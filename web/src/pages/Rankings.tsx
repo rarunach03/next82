@@ -103,8 +103,10 @@ export default function Rankings({ meta, teams }: { meta: Meta; teams: Team[] })
 
   const cat9 = format === 'cat9'
   const fmt = (v: number, digits: number) => v.toLocaleString('en-US', { maximumFractionDigits: digits, minimumFractionDigits: digits })
-  const header = (key: SortKey, label: React.ReactNode, tip?: string) => (
-    <th className="py-3 pr-2 sm:pr-3 font-medium whitespace-nowrap">
+  // On phones the games column moves under the value and only the "lost" explanation
+  // keeps its ⓘ, so the default columns fit.
+  const header = (key: SortKey, label: React.ReactNode, tip?: string, tipOnPhones = false, phones = true) => (
+    <th className={`py-3 pr-2 sm:pr-3 font-medium whitespace-nowrap ${phones ? '' : 'hidden sm:table-cell'}`}>
       <button
         onClick={() => setSort((s) => ({ key, desc: s.key === key ? !s.desc : key !== 'name' }))}
         className={`uppercase transition hover:text-ink ${sort.key === key ? 'text-ink' : ''}`}
@@ -112,7 +114,11 @@ export default function Rankings({ meta, teams }: { meta: Meta; teams: Team[] })
         {label}
         {sort.key === key && <span aria-hidden> {sort.desc ? '↓' : '↑'}</span>}
       </button>
-      {tip && <Info tip={tip} />}
+      {tip && (
+        <span className={tipOnPhones ? '' : 'hidden sm:inline'}>
+          <Info tip={tip} />
+        </span>
+      )}
     </th>
   )
 
@@ -178,7 +184,10 @@ export default function Rankings({ meta, teams }: { meta: Meta; teams: Team[] })
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-line text-left text-xs tracking-wide text-faint">
-              <th className="w-10 py-3 pr-2 pl-3 sm:w-12 sm:pl-4 font-medium uppercase">Rank</th>
+              <th className="w-8 py-3 pr-1 pl-3 sm:w-12 sm:pr-2 sm:pl-4 font-medium uppercase">
+                <span className="sm:hidden">#</span>
+                <span className="hidden sm:inline">Rank</span>
+              </th>
               {header('name', 'Player')}
               <th className="hidden py-3 pr-2 sm:pr-3 font-medium whitespace-nowrap uppercase sm:table-cell">
                 Status
@@ -193,8 +202,19 @@ export default function Rankings({ meta, teams }: { meta: Meta; teams: Team[] })
                 <>
                   Games<span className="hidden sm:inline">{view === 'ros' ? ' left' : ' this season'}</span>
                 </>,
+                undefined,
+                false,
+                false,
               )}
               {header('value', 'Value', GLOSSARY.aboveReplacement(fantasy.poolSize))}
+              {header(
+                'discount',
+                <>
+                  Lost<span className="hidden sm:inline"> to missed games</span>
+                </>,
+                GLOSSARY.durability,
+                true,
+              )}
               {more && (
                 <>
                   {header('perGame', cat9 ? 'Per game (z)' : 'Per game')}
@@ -203,14 +223,9 @@ export default function Rankings({ meta, teams }: { meta: Meta; teams: Team[] })
                     <Info tip={GLOSSARY.perGameRank} />
                   </th>
                   {header('change', 'Rank change', GLOSSARY.rankChange)}
-                  {header('discount', 'Durability discount', GLOSSARY.durability)}
-                  <th className="py-3 pr-2 sm:pr-3 font-medium whitespace-nowrap uppercase">
+                  <th className="py-3 pr-4 font-medium whitespace-nowrap uppercase">
                     Likely games
                     <Info tip={GLOSSARY.likelyRange} />
-                  </th>
-                  <th className="py-3 pr-4 font-medium whitespace-nowrap uppercase">
-                    Back-to-back rest
-                    <Info tip={GLOSSARY.b2b} />
                   </th>
                 </>
               )}
@@ -226,7 +241,7 @@ export default function Rankings({ meta, teams }: { meta: Meta; teams: Team[] })
                   onClick={r.p.rookie ? undefined : () => navigate(`/player/${r.p.id}`)}
                   className={`border-b border-line/60 transition last:border-0 ${r.p.rookie ? '' : 'cursor-pointer hover:bg-surface-2'}`}
                 >
-                  <td className="tabular py-3 pr-2 pl-3 sm:pl-4 font-display text-lg font-bold">{r.valueRank}</td>
+                  <td className="tabular py-3 pr-1 pl-3 sm:pr-2 sm:pl-4 font-display text-lg font-bold">{r.valueRank}</td>
                   <td className="py-3 pr-2 sm:pr-3">
                     <span className="font-medium">{r.p.name}</span>
                     <span className="ml-2 text-xs text-faint">{r.p.team}</span>
@@ -248,7 +263,7 @@ export default function Rankings({ meta, teams }: { meta: Meta; teams: Team[] })
                   <td className="hidden py-3 pr-2 sm:pr-3 sm:table-cell">
                     <Availability tier={r.p.tier} reason={r.p.noTierReason} safeLow={meta.tierSafeLow} riskyLow={meta.setbackGames} />
                   </td>
-                  <td className="tabular py-3 pr-2 sm:pr-3 text-muted">
+                  <td className="tabular hidden py-3 pr-2 sm:table-cell sm:pr-3 text-muted">
                     {r.p.override && !r.p.override.latestReturn ? (
                       <Tip tip="No firm return date, so this uses the middle of the likely range.">~{Math.round(r.games)}</Tip>
                     ) : (
@@ -256,7 +271,14 @@ export default function Rankings({ meta, teams }: { meta: Meta; teams: Team[] })
                     )}
                     {view === 'ros' && <span className="hidden text-faint sm:inline"> of {r.p.gamesLeft}</span>}
                   </td>
-                  <td className="tabular py-3 pr-2 sm:pr-3 font-semibold">{fmt(r.value, 0)}</td>
+                  <td className="tabular py-3 pr-2 sm:pr-3 font-semibold">
+                    {fmt(r.value, 0)}
+                    <div className="text-xs font-normal text-faint sm:hidden">
+                      {r.p.override && !r.p.override.latestReturn && '~'}
+                      {Math.round(r.games)} games
+                    </div>
+                  </td>
+                  <td className="tabular py-3 pr-3 sm:pr-4 text-down">{r.discount >= 0.5 ? `−${fmt(r.discount, 0)}` : <span className="text-faint">–</span>}</td>
                   {more && (
                     <>
                       <td className="tabular py-3 pr-2 sm:pr-3">{fmt(r.perGame, cat9 ? 2 : 1)}</td>
@@ -270,20 +292,10 @@ export default function Rankings({ meta, teams }: { meta: Meta; teams: Team[] })
                           </span>
                         )}
                       </td>
-                      <td className="tabular py-3 pr-2 sm:pr-3 text-muted">{r.discount > 0 ? `−${fmt(r.discount, 0)}` : '–'}</td>
-                      <td className="tabular py-3 pr-2 sm:pr-3 whitespace-nowrap text-muted">
+                      <td className="tabular py-3 pr-4 whitespace-nowrap text-muted">
                         {r.p.restLow !== null && r.p.restHigh !== null && view === 'ros'
                           ? `${Math.round(r.p.restLow)}–${Math.round(r.p.restHigh)}`
                           : '–'}
-                      </td>
-                      <td className="tabular py-3 pr-4 whitespace-nowrap text-muted">
-                        {r.p.b2bRate !== null && r.p.b2bLeft !== null ? (
-                          <>
-                            {Math.round(r.p.b2bRate * 100)}%<span className="text-faint"> of {r.p.b2bLeft}</span>
-                          </>
-                        ) : (
-                          '–'
-                        )}
                       </td>
                     </>
                   )}
@@ -305,9 +317,9 @@ export default function Rankings({ meta, teams }: { meta: Meta; teams: Team[] })
             {fantasy.poolSize} players (12 teams × 13), with FG% and FT% weighted by attempts.
           </p>
           <p>
-            Injured players with no firm return date use the middle of their likely range (marked ~). Durability discount:
-            value lost compared with playing {view === 'ros' ? 'every remaining game' : 'all 82 games'}. Back-to-back rest
-            comes from the last three seasons, pulled toward the league average; the forecasts already count typical resting.
+            Injured players with no firm return date use the middle of their likely range (marked ~). Lost to missed games:
+            value lost compared with playing {view === 'ros' ? 'every remaining game' : 'all 82 games'}, for players worth
+            more than a free agent per game. It's what Next82's availability forecasts add to per-game rankings.
           </p>
           <p>
             Rookies are ranked once they've played {fantasy.rookieMinGames} games: their stats are blended with past rookies
