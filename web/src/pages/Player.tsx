@@ -33,6 +33,7 @@ export default function Player({ meta }: { meta: Meta }) {
         ← {p.team ? `${p.teamName}` : 'All players'}
       </Link>
 
+      {/* Who, their status and the plain-English summary, in one block. */}
       <header className="mt-4">
         <h1 className="font-display text-5xl leading-none font-extrabold tracking-tight uppercase sm:text-6xl">{p.name}</h1>
         <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-muted">
@@ -40,11 +41,22 @@ export default function Player({ meta }: { meta: Meta }) {
             {team} · Age {p.age}
           </span>
           <InjuredBadge p={p} />
-          {p.tier && (
-            <span className="inline-flex items-center gap-1.5 text-sm">
-              <TierPill tier={p.tier} safeLow={meta.tierSafeLow} riskyLow={meta.setbackGames} label />
-            </span>
+          {p.tier && <TierPill tier={p.tier} safeLow={meta.tierSafeLow} riskyLow={meta.setbackGames} label />}
+        </p>
+        <p className="mt-4 max-w-2xl text-lg text-ink">{sentence(p, meta)}</p>
+        <p className="mt-2 max-w-2xl text-sm text-muted">
+          {p.tier ? (
+            <>
+              {p.tier} <Tip tip={GLOSSARY.tier(meta.tierSafeLow, meta.setbackGames)}>availability</Tip>:{' '}
+              {tierText(p.tier, meta.tierSafeLow, meta.setbackGames)}
+            </>
+          ) : (
+            p.noTierReason && <>No availability tier: {GLOSSARY.noTier[p.noTierReason]}</>
           )}
+        </p>
+        <p className="mt-1 text-sm text-faint">
+          {meta.seasonStarted && soFarText(p) && <>Played {soFarText(p)} so far · </>}
+          {meta.seasonStarted && meta.updatedAsOf ? `Updated through ${shortDate(meta.updatedAsOf)}` : 'Forecast made before the season'}
         </p>
       </header>
 
@@ -69,11 +81,16 @@ export default function Player({ meta }: { meta: Meta }) {
         ) : (
           <p className="font-display text-4xl font-bold">Not on an NBA roster</p>
         )}
-        <p className="mt-4 max-w-2xl text-lg text-ink">{sentence(p, meta)}</p>
-        <p className="mt-2 text-sm text-faint">
-          {meta.seasonStarted && soFarText(p) && <>Played {soFarText(p)} so far · </>}
-          {meta.seasonStarted && meta.updatedAsOf ? `Updated through ${shortDate(meta.updatedAsOf)}` : 'Forecast made before the season'}
+        <Forecasts p={p} meta={meta} />
+      </section>
+
+      <section className="mt-10">
+        <h2 className="font-display text-2xl font-bold uppercase">What drives the preseason forecast{p.comeback && ' if healthy'}</h2>
+        <p className="mt-1 mb-5 text-sm text-muted">
+          The average {p.comeback ? 'healthy comeback' : 'player'} is forecast at {Math.round(p.factorBase)} games. Each
+          factor moves this player's forecast up or down.
         </p>
+        <FactorChart factors={p.factors} />
       </section>
 
       <section className="mt-10">
@@ -98,22 +115,7 @@ export default function Player({ meta }: { meta: Meta }) {
         </p>
       </section>
 
-      <details className="group mt-10 rounded-2xl border border-line bg-surface">
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 sm:px-7 [&::-webkit-details-marker]:hidden">
-          <span>
-            <span className="font-display text-2xl font-bold uppercase">Details</span>
-            <span className="ml-3 text-sm text-muted">
-              Preseason forecast, what drives it{p.override ? ', injury sources' : ''}
-            </span>
-          </span>
-          <span aria-hidden className="text-muted transition group-open:rotate-180">
-            ▾
-          </span>
-        </summary>
-        <div className="border-t border-line px-5 pt-2 pb-8 sm:px-7">
-          <Details p={p} meta={meta} />
-        </div>
-      </details>
+      <Details p={p} meta={meta} />
     </article>
   )
 }
@@ -163,24 +165,12 @@ function sentence(p: PlayerDetail, meta: Meta): string {
   return `Not on the injury report; has played ${p.playedSoFar} of ${p.teamGamesSoFar} games and is ${games}.`
 }
 
-function Details({ p, meta }: { p: PlayerDetail; meta: Meta }) {
+/** Preseason vs. updated forecast, each with its likely range, and games played so far. */
+function Forecasts({ p, meta }: { p: PlayerDetail; meta: Meta }) {
   const soFar = meta.seasonStarted ? soFarText(p) : null
   const change = Math.round(p.forecast - (p.games / p.seasonGames) * 82)
   return (
     <>
-      {p.override && <OverrideNote override={p.override} />}
-
-      <p className="mt-5 text-sm text-muted">
-        {p.tier ? (
-          <>
-            <Tip tip={GLOSSARY.tier(meta.tierSafeLow, meta.setbackGames)}>Availability tier</Tip>{' '}
-            <TierPill tier={p.tier} /> {tierText(p.tier, meta.tierSafeLow, meta.setbackGames)}
-          </>
-        ) : (
-          p.noTierReason && <>No availability tier: {GLOSSARY.noTier[p.noTierReason]}</>
-        )}
-      </p>
-
       <div className={`mt-5 grid gap-px overflow-hidden rounded-2xl border border-line bg-line sm:grid-cols-2 ${p.comeback ? 'lg:grid-cols-4' : 'lg:grid-cols-3'}`}>
         {p.comeback ? (
           <>
@@ -234,22 +224,7 @@ function Details({ p, meta }: { p: PlayerDetail; meta: Meta }) {
         )}
       </div>
 
-      {p.b2bLeft !== null && p.b2bRate !== null && meta.b2bLeagueRate !== null && (
-        <p className="mt-4 text-sm text-muted">
-          <Tip tip={GLOSSARY.b2b}>Back-to-backs</Tip>: {p.team ?? 'The team'} has {p.b2bLeft} left. {p.name} sits the second
-          night about {Math.round(p.b2bRate * 100)}% of the time (league average {Math.round(meta.b2bLeagueRate * 100)}%), roughly{' '}
-          {Math.max(0, Math.round(p.b2bRate * p.b2bLeft))} game{Math.round(p.b2bRate * p.b2bLeft) === 1 ? '' : 's'}. The
-          forecast already counts typical resting.
-        </p>
-      )}
-
-      {p.comeback ? (
-        <p className="mt-4 rounded-xl border border-accent/30 bg-accent/10 px-4 py-3 text-sm text-ink">
-          {p.name} didn't play in {meta.dataThrough}. Players returning from a missed season tend to either play a lot or
-          barely play, so the preseason forecast has two numbers instead of one. If healthy, past comeback forecasts were
-          off by about {Math.round(meta.accuracy.comebackHealthyMae)} games on average.
-        </p>
-      ) : (
+      {!p.comeback && (
         <p className="mt-4 text-sm text-faint">
           The preseason forecast was made before the season started and stays fixed: its average miss is{' '}
           {meta.accuracy.modelMae} games, and half land within {Math.round(meta.accuracy.modelMedianError)}. The expected
@@ -258,42 +233,64 @@ function Details({ p, meta }: { p: PlayerDetail; meta: Meta }) {
           .
         </p>
       )}
+    </>
+  )
+}
 
-      <section className="mt-10">
-        <h3 className="font-display text-xl font-bold uppercase">What drives the preseason forecast{p.comeback && ' if healthy'}</h3>
-        <p className="mt-1 mb-5 text-sm text-muted">
-          The average {p.comeback ? 'healthy comeback' : 'player'} is forecast at {Math.round(p.factorBase)} games. Each
-          factor moves this player's forecast up or down.
+/** What applies to this player only: injury sources, back-to-backs, a comeback. */
+function Details({ p, meta }: { p: PlayerDetail; meta: Meta }) {
+  const b2b = p.b2bLeft !== null && p.b2bRate !== null && meta.b2bLeagueRate !== null
+  if (!p.override && !b2b && !p.comeback) return null
+  return (
+    <section className="mt-10">
+      <h2 className="font-display text-2xl font-bold uppercase">Details</h2>
+      {p.override && <OverrideNote override={p.override} />}
+
+      {b2b && (
+        <p className="mt-4 text-sm text-muted">
+          <Tip tip={GLOSSARY.b2b}>Back-to-backs</Tip>: {p.team ?? 'The team'} has {p.b2bLeft} left. {p.name} sits the second
+          night about {Math.round(p.b2bRate! * 100)}% of the time (league average {Math.round(meta.b2bLeagueRate! * 100)}%), roughly{' '}
+          {Math.max(0, Math.round(p.b2bRate! * p.b2bLeft!))} game{Math.round(p.b2bRate! * p.b2bLeft!) === 1 ? '' : 's'}. The
+          forecast already counts typical resting.
         </p>
-        <FactorChart factors={p.factors} />
-      </section>
+      )}
 
-      {p.similar.length > 0 && (
-        <section className="mt-10">
-          <h3 className="font-display text-xl font-bold uppercase">Similar past comebacks</h3>
-          <p className="mt-1 mb-4 text-sm text-muted">
-            Players with a similar age and role who missed a season (for any reason), and how many games they played when
-            they came back.
+      {p.comeback && (
+        <section className="mt-8">
+          <h3 className="font-display text-xl font-bold uppercase">Coming back from a missed season</h3>
+          <p className="mt-3 rounded-xl border border-accent/30 bg-accent/10 px-4 py-3 text-sm text-ink">
+            {p.name} didn't play in {meta.dataThrough}. Players returning from a missed season tend to either play a lot or
+            barely play, so the preseason forecast has two numbers instead of one. If healthy, past comeback forecasts were
+            off by about {Math.round(meta.accuracy.comebackHealthyMae)} games on average.
           </p>
-          <ul className="divide-y divide-line overflow-hidden rounded-2xl border border-line bg-bg">
-            {p.similar.map((s) => (
-              <li key={s.name + s.seasonMissed} className="flex items-center justify-between gap-4 px-4 py-3">
-                <div className="min-w-0">
-                  <div className="truncate font-medium">{s.name}</div>
-                  <div className="text-xs text-faint">
-                    Missed {s.seasonMissed} at {s.age} · season before: {s.before}
-                  </div>
-                </div>
-                <div className="tabular shrink-0 text-right">
-                  <span className="font-display text-2xl font-bold">{s.comebackGames}</span>
-                  <span className="ml-1 text-xs text-faint">games</span>
-                </div>
-              </li>
-            ))}
-          </ul>
+          {p.similar.length > 0 && (
+            <>
+              <h4 className="mt-6 font-semibold">Similar past comebacks</h4>
+              <p className="mt-1 mb-4 text-sm text-muted">
+                Players with a similar age and role who missed a season (for any reason), and how many games they played
+                when they came back.
+              </p>
+              <ul className="divide-y divide-line overflow-hidden rounded-2xl border border-line bg-bg">
+                {p.similar.map((s) => (
+                  <li key={s.name + s.seasonMissed} className="flex items-center justify-between gap-4 px-4 py-3">
+                    <div className="min-w-0">
+                      <div className="truncate font-medium">{s.name}</div>
+                      <div className="text-xs text-faint">
+                        Missed {s.seasonMissed} at {s.age} · season before: {s.before}
+                      </div>
+                    </div>
+                    <div className="tabular shrink-0 text-right">
+                      <span className="font-display text-2xl font-bold">{s.comebackGames}</span>
+                      <span className="ml-1 text-xs text-faint">games</span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
         </section>
       )}
-    </>
+    </section>
   )
 }
 
