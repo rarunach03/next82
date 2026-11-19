@@ -2,15 +2,14 @@ import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { BrowserRouter, Link, Navigate, Route, Routes, useLocation } from 'react-router'
 import SearchBox from './components/SearchBox'
 import { latestFinishedSeason, shortDate, useIndex } from './data'
-import About from './pages/About'
-import Accuracy from './pages/Accuracy'
 import Home from './pages/Home'
 import MyRoster from './pages/MyRoster'
 import Rankings from './pages/Rankings'
 import { LEGACY_PATHS, legacyRedirect } from './redirects'
 
-// The player page carries the chart library, so it loads only when first opened.
+// The player and How it works pages carry the chart library, so they load only when first opened.
 const Player = lazy(() => import('./pages/Player'))
+const HowItWorks = lazy(() => import('./pages/HowItWorks'))
 import type { Index } from './types'
 
 export default function App() {
@@ -23,10 +22,11 @@ export default function App() {
 
 function Shell() {
   const index = useIndex()
-  const { pathname } = useLocation()
+  const { pathname, hash } = useLocation()
+  // New page: start at the top, unless the link points at a part of it (#accuracy).
   useEffect(() => {
-    window.scrollTo(0, 0)
-  }, [pathname])
+    if (!hash) window.scrollTo(0, 0)
+  }, [pathname, hash])
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -63,8 +63,8 @@ function Shell() {
               pathname={pathname}
               align="right"
               items={[
-                { to: '/accuracy', label: 'How accurate is it?' },
-                { to: '/about', label: 'About the forecasts' },
+                { to: '/how-it-works#method', label: 'How the forecasts are made' },
+                { to: '/how-it-works#accuracy', label: 'How accurate is it?' },
               ]}
             />
           </nav>
@@ -89,8 +89,14 @@ function Shell() {
               />
               <Route path="/rankings" element={<Rankings meta={index.meta} teams={index.teams} />} />
               <Route path="/roster" element={<MyRoster index={index} />} />
-              <Route path="/accuracy" element={<Accuracy meta={index.meta} />} />
-              <Route path="/about" element={<About meta={index.meta} />} />
+              <Route
+                path="/how-it-works"
+                element={
+                  <Suspense fallback={<p className="py-16 text-muted">Loading…</p>}>
+                    <HowItWorks meta={index.meta} />
+                  </Suspense>
+                }
+              />
               {LEGACY_PATHS.map((path) => (
                 <Route key={path} path={path} element={<LegacyRedirect />} />
               ))}
@@ -197,7 +203,7 @@ function Footer({ index }: { index: Index }) {
           {meta.seasonStarted && meta.soFarThrough && <>Games through {shortDate(meta.soFarThrough)} · </>}
           {rosters && <>Teams as of {rosters} · </>}
           Built from NBA seasons since 1996-97 ·{' '}
-          <Link to="/accuracy" className="text-muted underline-offset-2 hover:underline">
+          <Link to="/how-it-works#accuracy" className="text-muted underline-offset-2 hover:underline">
             How accurate is it?
           </Link>
         </p>

@@ -5,7 +5,7 @@ import Leaderboard from '../components/Leaderboard'
 import ScoringPicker from '../components/ScoringPicker'
 import SearchBox from '../components/SearchBox'
 import StashTable from '../components/StashTable'
-import { baselineText, isInjured, parseFormat, shortDate, useFantasy } from '../data'
+import { isInjured, parseFormat, shortDate, useFantasy } from '../data'
 import { allPlayers, injuredPlayers, parseView, stashPlayers, VIEWS, type PlayerView } from '../playerViews'
 import type { Index } from '../types'
 
@@ -61,6 +61,15 @@ export default function Home({ index }: { index: Index }) {
         <p className="mt-4 max-w-xl text-muted">
           Every NBA player's expected games this season, updated daily with games played and injury news.
         </p>
+        <Link
+          to="/how-it-works#accuracy"
+          className="group mt-4 inline-flex flex-wrap items-baseline gap-x-1.5 rounded-xl border border-line bg-surface px-3 py-2 text-sm transition hover:border-accent/60"
+        >
+          <span className="text-muted">On past seasons, misses by</span>
+          <span className="tabular font-semibold text-accent">{meta.accuracy.modelMae} games</span>
+          <span className="text-muted">on average vs. {meta.accuracy.bestBaselineMae} for the best simple guess</span>
+          <span className="text-accent transition group-hover:translate-x-0.5">→</span>
+        </Link>
 
         <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <div className="rounded-2xl border border-accent/50 bg-surface p-4 sm:col-span-2 lg:col-span-1">
@@ -135,13 +144,6 @@ export default function Home({ index }: { index: Index }) {
             <StashTable rows={stash} />
           ))}
 
-        <p className="mt-6 text-sm text-faint">
-          How good are these? Tested on past seasons, the preseason forecasts missed by {meta.accuracy.modelMae} games on
-          average, against {meta.accuracy.bestBaselineMae} {baselineText(meta.accuracy.bestBaseline)}.{' '}
-          <Link to="/accuracy" className="text-accent">
-            See how accurate it is →
-          </Link>
-        </p>
       </section>
     </>
   )

@@ -25,10 +25,14 @@ export function legacyRedirect(pathname: string, search: string): string | null 
       const side = (name: string) => (params.get(name) ?? '').split(',').map(Number).filter((n) => Number.isInteger(n) && n > 0)
       return `/roster?${keep(['format'], { trade: tradeParam({ give: side('a'), get: side('b') }) })}`
     }
+    case '/about':
+      return '/how-it-works#method'
+    case '/accuracy':
+      return '/how-it-works#accuracy'
     default:
       return null
   }
 }
 
 /** Old addresses that redirect (for the router). */
-export const LEGACY_PATHS = ['/injured', '/stash', '/trade']
+export const LEGACY_PATHS = ['/injured', '/stash', '/trade', '/about', '/accuracy']

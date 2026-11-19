@@ -15,6 +15,11 @@ test('a shared trade opens in My Roster with the same players and scoring', () =
   assert.equal(legacyRedirect('/trade', ''), '/roster?trade=')
 })
 
+test('about and accuracy open the matching part of How it works', () => {
+  assert.equal(legacyRedirect('/about', ''), '/how-it-works#method')
+  assert.equal(legacyRedirect('/accuracy', ''), '/how-it-works#accuracy')
+})
+
 test('current addresses are not redirected', () => {
-  for (const path of ['/', '/rankings', '/roster', '/player/203999']) assert.equal(legacyRedirect(path, '?view=x'), null)
+  for (const path of ['/', '/rankings', '/roster', '/how-it-works', '/player/203999']) assert.equal(legacyRedirect(path, '?view=x'), null)
 })
