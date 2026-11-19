@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { Fantasy, Index, OutInfo, Override, PlayerDetail, PlayerSummary, SeasonAccuracy } from './types'
+import type { Fantasy, FantasyFormat, Index, OutInfo, Override, PlayerDetail, PlayerSummary, SeasonAccuracy } from './types'
 
 /** Where the site is served from: "/" locally, "/next82/" on GitHub Pages. */
 // (import.meta.env is undefined under `node --test`, which imports the helpers below.)
@@ -100,6 +100,17 @@ export function latestFinishedSeason(today = new Date()): string {
 /** How each simple-guess baseline is described to readers. */
 export function baselineText(name: string): string {
   return name === 'Same as last year' ? "guessing last season's total" : "guessing each player's 3-season average"
+}
+
+export const FORMATS: { id: FantasyFormat; label: string }[] = [
+  { id: 'espn', label: 'ESPN points' },
+  { id: 'yahoo', label: 'Yahoo points' },
+  { id: 'cat9', label: '9-cat' },
+]
+
+/** The fantasy scoring named in the URL, ESPN points by default. */
+export function parseFormat(raw: string | null): FantasyFormat {
+  return FORMATS.some((f) => f.id === raw) ? (raw as FantasyFormat) : 'espn'
 }
 
 /**

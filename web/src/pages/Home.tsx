@@ -1,22 +1,48 @@
 import { useMemo } from 'react'
 import { Link, useSearchParams } from 'react-router'
+import InjuredTable from '../components/InjuredTable'
 import Leaderboard from '../components/Leaderboard'
+import ScoringPicker from '../components/ScoringPicker'
 import SearchBox from '../components/SearchBox'
-import { baselineText, isInjured, shortDate } from '../data'
+import StashTable from '../components/StashTable'
+import { baselineText, isInjured, parseFormat, shortDate, useFantasy } from '../data'
+import { allPlayers, injuredPlayers, parseView, stashPlayers, VIEWS, type PlayerView } from '../playerViews'
 import type { Index } from '../types'
 
+/** All players, with views for who's injured and who's worth stashing. The view and team live in the URL. */
 export default function Home({ index }: { index: Index }) {
   const { meta, teams, players } = index
   const [params, setParams] = useSearchParams()
+  const view = parseView(params.get('view'))
   const teamAbbr = params.get('team')?.toUpperCase() ?? ''
   const team = teams.find((t) => t.abbr === teamAbbr)
-  // Highest expected games first (the updated forecast once the season is on).
-  const rows = useMemo(() => {
-    const list = team ? players.filter((p) => p.team === team.abbr) : players
-    const key = (p: (typeof players)[number]) => (meta.seasonStarted ? (p.updated ?? -1) : p.shown)
-    return [...list].sort((a, b) => key(b) - key(a))
-  }, [players, team, meta.seasonStarted])
+  const format = parseFormat(params.get('format'))
+  const fantasy = useFantasy()
+
+  const rows = useMemo(() => allPlayers(players, team?.abbr ?? '', meta.seasonStarted), [players, team, meta.seasonStarted])
+  const injured = useMemo(() => injuredPlayers(players, team?.abbr ?? ''), [players, team])
   const injuredCount = useMemo(() => players.filter(isInjured).length, [players])
+  const stash = useMemo(
+    () => (fantasy ? stashPlayers(fantasy.players, format, fantasy.replacement[format], team?.abbr ?? '') : null),
+    [fantasy, format, team],
+  )
+
+  // Update from the latest URL, dropping defaults so links stay short.
+  function set(key: string, value: string, fallback = '') {
+    setParams(
+      (current) => {
+        const next = new URLSearchParams(current)
+        if (value === fallback) next.delete(key)
+        else next.set(key, value)
+        return next
+      },
+      { replace: true },
+    )
+  }
+  function showView(v: PlayerView) {
+    set('view', v, 'all')
+    document.getElementById('players')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
 
   return (
     <>
@@ -42,27 +68,39 @@ export default function Home({ index }: { index: Index }) {
             <p className="mt-0.5 mb-3 text-sm text-muted">Games expected, injuries and why.</p>
             <SearchBox players={players} size="compact" autoFocus />
           </div>
+          <Choice to="/rankings" title="Fantasy rankings" text="Who's worth the most from here on, counting games they'll miss." />
           <Choice
-            to="/rankings"
-            title="Fantasy rankings"
-            text="Who's worth the most from here on, counting games they'll miss."
-          />
-          <Choice
-            to="/injured"
+            to="/?view=injured"
+            onClick={() => showView('injured')}
             title="Who's injured"
             text={`${injuredCount} players out with an injury, and when they're expected back.`}
           />
         </div>
       </section>
 
-      <section className="pb-16">
-        <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-          <h2 className="font-display text-3xl font-bold uppercase">{team ? team.name : 'All players'}</h2>
+      <section id="players" className="scroll-mt-20 pb-16">
+        <h2 className="font-display text-3xl font-bold uppercase">{team ? team.name : 'All players'}</h2>
+        <div className="mt-3 mb-4 flex flex-wrap items-end gap-3">
+          <div role="tablist" aria-label="Show" className="inline-flex rounded-lg border border-line bg-surface p-0.5">
+            {VIEWS.map((v) => (
+              <button
+                key={v.id}
+                role="tab"
+                aria-selected={view === v.id}
+                onClick={() => set('view', v.id, 'all')}
+                className={`rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap transition ${
+                  view === v.id ? 'bg-accent text-bg' : 'text-muted hover:text-ink'
+                }`}
+              >
+                {v.label}
+              </button>
+            ))}
+          </div>
           <label className="flex items-center gap-2 text-sm text-muted">
             Team
             <select
               value={team?.abbr ?? ''}
-              onChange={(e) => setParams(e.target.value ? { team: e.target.value } : {})}
+              onChange={(e) => set('team', e.target.value)}
               className="rounded-lg border border-line bg-surface px-3 py-2 text-ink outline-none focus:border-accent"
             >
               <option value="">All teams</option>
@@ -73,19 +111,30 @@ export default function Home({ index }: { index: Index }) {
               ))}
             </select>
           </label>
+          {view === 'stash' && <ScoringPicker format={format} onChange={(f) => set('format', f, 'espn')} />}
         </div>
-        <Leaderboard
-          key={team?.abbr ?? 'all'}
-          players={rows}
-          seasonStarted={meta.seasonStarted}
-          showTeam={!team}
-        />
-        {team && team.noForecast.length > 0 && (
-          <p className="mt-3 text-sm text-faint">
-            No forecast yet: {team.noForecast.join(', ')}. Forecasts need NBA games in {meta.previousSeason} or{' '}
-            {meta.dataThrough}, so rookies aren't included.
-          </p>
+
+        {view === 'all' && (
+          <>
+            <Leaderboard key={team?.abbr ?? 'all'} players={rows} seasonStarted={meta.seasonStarted} showTeam={!team} />
+            {team && team.noForecast.length > 0 && (
+              <p className="mt-3 text-sm text-faint">
+                No forecast yet: {team.noForecast.join(', ')}. Forecasts need NBA games in {meta.previousSeason} or{' '}
+                {meta.dataThrough}, so rookies aren't included.
+              </p>
+            )}
+          </>
         )}
+        {view === 'injured' && <InjuredTable players={injured} team={team?.abbr ?? ''} />}
+        {view === 'stash' &&
+          (fantasy === undefined ? (
+            <p className="py-6 text-muted">Loading…</p>
+          ) : stash === null ? (
+            <p className="py-6 text-muted">Fantasy values aren't available yet.</p>
+          ) : (
+            <StashTable rows={stash} />
+          ))}
+
         <p className="mt-6 text-sm text-faint">
           How good are these? Tested on past seasons, the preseason forecasts missed by {meta.accuracy.modelMae} games on
           average, against {meta.accuracy.bestBaselineMae} {baselineText(meta.accuracy.bestBaseline)}.{' '}
@@ -98,9 +147,19 @@ export default function Home({ index }: { index: Index }) {
   )
 }
 
-function Choice({ to, title, text }: { to: string; title: string; text: string }) {
+function Choice({ to, title, text, onClick }: { to: string; title: string; text: string; onClick?: () => void }) {
   return (
-    <Link to={to} className="group rounded-2xl border border-line bg-surface p-4 transition hover:border-accent/60 hover:bg-surface-2">
+    <Link
+      to={to}
+      onClick={
+        onClick &&
+        ((e) => {
+          e.preventDefault()
+          onClick()
+        })
+      }
+      className="group rounded-2xl border border-line bg-surface p-4 transition hover:border-accent/60 hover:bg-surface-2"
+    >
       <h2 className="font-display text-xl font-bold uppercase">
         {title} <span className="text-accent transition group-hover:translate-x-0.5">→</span>
       </h2>

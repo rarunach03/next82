@@ -1,15 +1,14 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
-import { BrowserRouter, Link, Route, Routes, useLocation } from 'react-router'
+import { BrowserRouter, Link, Navigate, Route, Routes, useLocation } from 'react-router'
 import SearchBox from './components/SearchBox'
 import { latestFinishedSeason, shortDate, useIndex } from './data'
 import About from './pages/About'
 import Accuracy from './pages/Accuracy'
 import Home from './pages/Home'
-import Injured from './pages/Injured'
 import MyRoster from './pages/MyRoster'
 import Rankings from './pages/Rankings'
-import Stash from './pages/Stash'
 import Trade from './pages/Trade'
+import { LEGACY_PATHS, legacyRedirect } from './redirects'
 
 // The player page carries the chart library, so it loads only when first opened.
 const Player = lazy(() => import('./pages/Player'))
@@ -48,7 +47,7 @@ function Shell() {
               pathname={pathname}
               items={[
                 { to: '/', label: 'All players' },
-                { to: '/injured', label: "Who's injured" },
+                { to: '/?view=injured', label: "Who's injured" },
               ]}
             />
             <NavMenu
@@ -58,7 +57,7 @@ function Shell() {
                 { to: '/roster', label: 'My roster' },
                 { to: '/rankings', label: 'Rankings' },
                 { to: '/trade', label: 'Trade analyzer' },
-                { to: '/stash', label: 'Who to stash' },
+                { to: '/?view=stash', label: 'Who to stash' },
               ]}
             />
             <NavMenu
@@ -90,13 +89,14 @@ function Shell() {
                   </Suspense>
                 }
               />
-              <Route path="/injured" element={<Injured index={index} />} />
               <Route path="/rankings" element={<Rankings meta={index.meta} teams={index.teams} />} />
               <Route path="/roster" element={<MyRoster index={index} />} />
               <Route path="/trade" element={<Trade />} />
-              <Route path="/stash" element={<Stash />} />
               <Route path="/accuracy" element={<Accuracy meta={index.meta} />} />
               <Route path="/about" element={<About meta={index.meta} />} />
+              {LEGACY_PATHS.map((path) => (
+                <Route key={path} path={path} element={<LegacyRedirect />} />
+              ))}
               <Route path="*" element={<p className="py-16 text-muted">Page not found.</p>} />
             </Routes>
           </>
@@ -106,6 +106,12 @@ function Shell() {
       {index && <Footer index={index} />}
     </div>
   )
+}
+
+/** An old address: replaced by where its content lives now, so shared links keep working. */
+function LegacyRedirect() {
+  const { pathname, search } = useLocation()
+  return <Navigate to={legacyRedirect(pathname, search) ?? '/'} replace />
 }
 
 /** A header menu: tap or click to open; closes on Escape, a tap elsewhere or navigation
