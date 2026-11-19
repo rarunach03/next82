@@ -5,6 +5,7 @@ import { latestFinishedSeason, shortDate, useIndex } from './data'
 import Home from './pages/Home'
 import MyRoster from './pages/MyRoster'
 import Rankings from './pages/Rankings'
+import { isCurrent, menuActive, MENUS, type NavItem } from './nav'
 import { LEGACY_PATHS, legacyRedirect } from './redirects'
 
 // The player and How it works pages carry the chart library, so they load only when first opened.
@@ -32,8 +33,11 @@ function Shell() {
     <div className="flex min-h-dvh flex-col">
       <header className="sticky top-0 z-30 border-b border-line bg-bg/85 backdrop-blur">
         <div className="mx-auto flex max-w-4xl items-center gap-3 px-4 py-3 sm:gap-4 sm:px-6">
-          <Link to="/" className="font-display text-2xl font-extrabold tracking-tight uppercase">
-            Next<span className="text-accent">82</span>
+          <Link to="/" className="leading-none">
+            <span className="font-display text-2xl font-extrabold tracking-tight uppercase">
+              Next<span className="text-accent">82</span>
+            </span>
+            {index && <DataDate index={index} />}
           </Link>
           <nav className="ml-auto flex items-center gap-1 sm:gap-2">
             {index && pathname !== '/' && (
@@ -41,32 +45,9 @@ function Shell() {
                 <SearchBox players={index.players} size="compact" />
               </div>
             )}
-            <NavMenu
-              label="Players"
-              pathname={pathname}
-              items={[
-                { to: '/', label: 'All players' },
-                { to: '/?view=injured', label: "Who's injured" },
-              ]}
-            />
-            <NavMenu
-              label="Fantasy"
-              pathname={pathname}
-              items={[
-                { to: '/roster', label: 'My roster' },
-                { to: '/rankings', label: 'Rankings' },
-                { to: '/?view=stash', label: 'Who to stash' },
-              ]}
-            />
-            <NavMenu
-              label="How it works"
-              pathname={pathname}
-              align="right"
-              items={[
-                { to: '/how-it-works#method', label: 'How the forecasts are made' },
-                { to: '/how-it-works#accuracy', label: 'How accurate is it?' },
-              ]}
-            />
+            {MENUS.map((m, i) => (
+              <NavMenu key={m.label} label={m.label} items={m.items} align={i === MENUS.length - 1 ? 'right' : 'left'} />
+            ))}
           </nav>
         </div>
       </header>
@@ -119,23 +100,16 @@ function LegacyRedirect() {
 
 /** A header menu: tap or click to open; closes on Escape, a tap elsewhere or navigation
  * (it remembers the page it was opened on and counts as open only there). */
-function NavMenu({
-  label,
-  items,
-  pathname,
-  align = 'left',
-}: {
-  label: string
-  items: { to: string; label: string }[]
-  pathname: string
-  align?: 'left' | 'right'
-}) {
+function NavMenu({ label, items, align = 'left' }: { label: string; items: NavItem[]; align?: 'left' | 'right' }) {
+  const location = useLocation()
+  // The whole address, so picking a view or part of the same page also closes the menu.
+  const here = location.pathname + location.search + location.hash
   const [openOn, setOpenOn] = useState<string | null>(null)
-  const open = openOn === pathname
+  const open = openOn === here
   const setOpen = (next: boolean | ((was: boolean) => boolean)) =>
-    setOpenOn((typeof next === 'function' ? next(open) : next) ? pathname : null)
+    setOpenOn((typeof next === 'function' ? next(open) : next) ? here : null)
   const ref = useRef<HTMLDivElement>(null)
-  const active = items.some((i) => i.to === pathname)
+  const active = menuActive(items, location.pathname)
   useEffect(() => {
     if (!open) return
     const outside = (e: PointerEvent) => !ref.current?.contains(e.target as Node) && setOpenOn(null)
@@ -168,7 +142,8 @@ function NavMenu({
             <Link
               key={i.to}
               to={i.to}
-              className={`block px-4 py-2.5 text-sm transition hover:bg-surface-2 ${i.to === pathname ? 'text-accent' : 'text-ink'}`}
+              aria-current={isCurrent(i.to, location) ? 'page' : undefined}
+              className={`block px-4 py-2.5 text-sm transition hover:bg-surface-2 ${isCurrent(i.to, location) ? 'text-accent' : 'text-ink'}`}
             >
               {i.label}
             </Link>
@@ -176,6 +151,23 @@ function NavMenu({
         </div>
       )}
     </div>
+  )
+}
+
+/** How fresh the numbers are, under the logo on every page: games through a date, or before the season. */
+function DataDate({ index }: { index: Index }) {
+  const { meta } = index
+  return (
+    <span className="mt-0.5 block text-[11px] font-medium tracking-wide whitespace-nowrap text-faint">
+      {meta.seasonStarted && meta.soFarThrough ? (
+        <>
+          <span className="sm:hidden">Thru</span>
+          <span className="hidden sm:inline">Games thru</span> {shortDate(meta.soFarThrough)}
+        </>
+      ) : (
+        'Preseason'
+      )}
+    </span>
   )
 }
 

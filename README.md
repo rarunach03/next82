@@ -7,14 +7,22 @@ what drives each number, and turns it into fantasy basketball rankings.
 
 ## What's on the site
 
-Each page leads with one plain answer and keeps the details a click away. Player pages open with
-"Expected to play about X games (likely A–B)" from the updated forecast and one sentence on status,
-injury, return estimate and games expected; the preseason forecast, its factors and the injury
-adjustment's kind and sources are under Details. Injured players carry one "Injured" badge
-everywhere (its source shows on hover or tap), jargon has short hover explanations, and the menu is
-Players (all players, who's injured), Fantasy (rankings, trade analyzer, who to stash) and How it
-works (accuracy, about). Rankings show rank, player, status, games left and value, with the rest
-behind "More columns".
+The site answers one question, "How many games will this player play, and why?", and its menus
+follow that story: the forecast (Players), using it (Fantasy) and trusting it (How it works).
+Five destinations:
+
+- **All players** (`/`): every player by expected games, with views for who's injured (injury,
+  expected return, source, games still expected) and who's worth stashing (`/?view=injured`,
+  `/?view=stash`), plus a team filter.
+- **Player pages** (`/player/:id`): one header with status, tier and a plain sentence on injury,
+  return and games expected; then the forecast (preseason vs. updated, with ranges), what drives
+  it, games by season, and details (injury sources, back-to-backs, comebacks when they apply).
+- **Rankings** (`/rankings`) and **My roster** (`/roster`, which also tests trades) under Fantasy.
+- **How it works** (`/how-it-works`): how the forecasts are made, how accurate they are, limits.
+
+Injured players carry one "Injured" badge everywhere (its source shows on hover or tap), jargon has
+short hover explanations, and the header shows how recent the data is. Old addresses (`/injured`,
+`/stash`, `/trade`, `/about`, `/accuracy`) redirect to where their content lives now.
 
 - **Preseason forecast.** Games each player will play this season, made before opening night
   (Oct 20, 2026) and frozen. It never changes, so it can be graded honestly. Each forecast
@@ -33,11 +41,14 @@ behind "More columns".
   start doesn't take over) times forecast games, measured above replacement level (the
   156th-best player per game, roughly the best free agent). Rest-of-season value by default,
   full-season as a second view; ESPN points, Yahoo points and 9-category leagues. Rookies are
-  ranked once they've played 5 games.
+  ranked once they've played 5 games. A default column shows the value each player loses to
+  expected missed games.
 - **My roster.** Enter up to 13 players (saved in the browser) to see games left, likely ranges,
   tiers and value, plus 5,000 simulated rest-of-season outcomes for the roster (bad, typical and
   good season), plain-English risk flags, and safer players with similar production to swap in.
-- **Accuracy page.** The frozen preseason forecast graded every day against games played so far,
+  "Test a trade" compares both sides' rest-of-season value and reruns the simulation and risk
+  check for the roster after the trade; the trade lives in the link (`/roster?trade=1_2-for-3`).
+- **Accuracy.** The frozen preseason forecast graded every day against games played so far,
   next to two simple guesses, with an honest "too early to tell" while the gap could be luck.
 - **Injury adjustments.** The NBA's official injury report is read daily. Players listed Out with a
   serious injury (ACL, Achilles, labrum, meniscus, patellar tendon tear; foot, lower-leg, fibula,
@@ -45,9 +56,8 @@ behind "More columns".
   from cited recovery studies. Every 3 days an automatic news search (Claude Code, restricted to web
   search and one file) looks for team-announced timelines, which override the estimate; manual
   adjustments cover the rest. Each is labeled on the site with its sources.
-- **Fantasy tools.** A trade analyzer (rest-of-season value of two sides, shareable by link), a
-  "who to stash" list of injured players worth holding, and back-to-back counts with each player's
-  chance of sitting the second night.
+- **Back-to-backs.** On player pages: how many each team has left and each player's chance of
+  sitting the second night.
 
 Data from NBA.com. Unofficial, non-commercial student project, not affiliated with the NBA or its
 teams. No ads or paid features.
@@ -97,7 +107,7 @@ python -m next82.injury_history  # past injury reports for the model (downloaded
 python -m next82.injury_features # do injury-report features improve the updated forecast?
 python -m next82.export        # write the website's data (web/public/data/)
 pytest                         # tests
-cd web && npm test             # website logic tests (roster simulation, risk flags, swaps)
+cd web && npm test             # website logic tests (roster, trades, views, menus, redirects)
 ```
 
 The frozen files (`data/processed/preseason_*.parquet`) can't be overwritten; delete them only
@@ -131,7 +141,7 @@ Run it by hand any time:
 ## Injury adjustments
 
 The updated forecast can't read injury news on its own, so three kinds of adjustment change it
-(fantasy values and tiers use them; the preseason forecast, the accuracy page and the model's test
+(fantasy values and tiers use them; the preseason forecast, the accuracy grading and the model's test
 metrics never do). All use the same math: games played so far plus the model's share of the team's
 games from the return window onward; the earliest return sets the high end of the range and the
 latest return the low end (0 more games if there's no latest return, e.g. when it could be
@@ -256,7 +266,8 @@ src/next82/
   explain.py       SHAP factors with readable labels
   export.py        the website's data (the only way data reaches the site)
 web/               React site (Vite, TypeScript, Tailwind, Recharts); data in public/data/
-  src/roster/      My roster logic: simulation, risk flags (rules in flags.ts), swap suggestions
+  src/roster/      My roster logic: simulation, risk flags (rules in flags.ts), swaps, trades
+  src/nav.ts       header menus; redirects.ts sends old addresses on; playerViews.ts the All players views
 scripts/           refresh.sh (daily update), news_timelines.sh (news search)
 data/, models/     committed: frozen forecasts, current-season data, LightGBM models (text format)
 app/               the original Streamlit app (internal)
