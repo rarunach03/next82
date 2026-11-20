@@ -73,9 +73,10 @@ teams. No ads or paid features.
 
 | Forecast | Tested on | Average miss | Best simple guess |
 |---|---|---|---|
-| Preseason forecast (full season) | 2023-24, 2024-25 | 15.6 games | 17.2 (3-season average) |
-| Updated forecast (rest of season) | 2024-25, 2025-26 | 7.6 games | 8.1 (pace/preseason blend) |
-| Updated forecast, players currently out 5+ games | 2024-25, 2025-26 | 6.6 games | 7.6 (current pace) |
+| Season model, current (LightGBM + linear blend) | 2023-24, 2024-25 | 15.4 games | 17.2 (3-season average) |
+| Season model behind the frozen 2026-27 preseason forecasts (LightGBM) | 2023-24, 2024-25 | 15.6 games | 17.2 |
+| Updated forecast (rest of season) | 2024-25, 2025-26 | 7.5 games | 8.0 (pace/preseason blend) |
+| Updated forecast, players currently out 5+ games | 2024-25, 2025-26 | 6.5 games | 7.6 (current pace) |
 | Comeback players, games if healthy | 2000-01 to 2022-23 | 15.3 games | 23.4 (3-season average) |
 
 Settings and feature choices were made on separate validation seasons, so the test seasons
@@ -112,6 +113,7 @@ python -m next82.back_to_back  # back-to-back rest rates and their validation
 python -m next82.auto_overrides  # each player's last game before the season (for injury start dates)
 python -m next82.injury_history  # past injury reports for the model (downloaded once, cached)
 python -m next82.injury_features # do injury-report features improve the updated forecast?
+python -m next82.improve ablation  # season model: ablation, candidates, tune, finalize, final (once)
 python -m next82.game_level    # game-by-game beta: player-game rows, model, quality gates
 python -m next82.export        # write the website's data (web/public/data/)
 pytest                         # tests
@@ -218,10 +220,16 @@ classified as fractures too, so a tibia or fibula stress fracture gets the traum
 - **Data:** regular-season stats, bios and game logs for 1996-97 to 2025-26 from stats.nba.com
   via nba_api, plus this season's games. There's no public injury data, so long absences come
   from matching each player's game log against their team's schedule.
-- **Preseason model** (`train.py`): LightGBM on 12,300 past player-seasons. The target is the
-  share of the schedule played, so shortened seasons compare fairly. 27 inputs: age, experience,
-  minutes, games played in each of the last three seasons, long absences, games missed at the
-  start or end of a season, and comeback inputs. SHAP values explain each forecast.
+- **Season model** (`train.py`): 0.8 LightGBM + 0.2 linear regression on 12,300 past
+  player-seasons (the blend misses less than either alone; this season's frozen preseason
+  forecasts came from LightGBM alone). The target is the share of the schedule played, so
+  shortened seasons compare fairly. 27 inputs: age, experience, minutes, games played in each of
+  the last three seasons, long absences, games missed at the start or end of a season, and
+  comeback inputs. SHAP values explain each forecast (exactly, for both parts of the blend).
+- **Improving it** (`improve.py`): every choice on five rolling validation seasons (2018-19 to
+  2022-23), the test seasons read once at the end. Ablation: minutes and workload matter most on
+  top of everything else, then absences; past games played is the strongest group on its own.
+  Six new feature groups were tried and none kept (`models/improve.json`, `models/ablation.png`).
 - **Updated forecast** (`in_season.py`): trained on snapshots of every player every 14 days
   through 26 past seasons, each using only games before its date. Inputs add games played and
   missed so far, the current absence streak, recent games and team games left.
@@ -292,7 +300,7 @@ tests/             pytest; tests needing the full downloaded data skip themselve
   than it is (a still-out player past the typical recovery is treated as "back any day").
 - Forecasts assume the player is in the league. Players not on a roster who haven't played get
   no updated forecast.
-- The preseason edge over simple guessing is real but modest (15.6 vs 17.2 games).
+- The preseason edge over simple guessing is real but modest (15.4 vs 17.2 games).
 - Comeback forecasts can't see injury type or medical clearance.
 - The news search only finds what's published and stated clearly; vague reports ("no timeline",
   "day to day") add nothing, and it runs on the Mac, so it pauses when the Mac is off.
