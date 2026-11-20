@@ -19,3 +19,18 @@ def test_frozen_forecast_uses_only_preseason_data():
     frozen = pd.read_parquet(preseason.PRESEASON_PATH)
     # Rows describe the last finished season; the forecast is for the one after it.
     assert (frozen.SEASON < preseason.config.FORECAST_SEASON).all()
+
+
+def test_frozen_2026_27_preseason_forecasts_never_change():
+    """The frozen preseason forecasts (and their ranges) are shown and graded on the site;
+    retraining or a new model must never touch them."""
+    import hashlib
+
+    from next82.preseason import PRESEASON_PATH, PRESEASON_RANGES_PATH
+
+    expected = {
+        PRESEASON_PATH: "a0c5811dc0567ea44330e9d943e91e6553e3c4cedf842ed052ca8e8c489d21cb",
+        PRESEASON_RANGES_PATH: "329d3e8b12dbc371552c8a3f0b570b2b76705144feeeac664aa661a7f7b77259",
+    }
+    for path, digest in expected.items():
+        assert hashlib.sha256(path.read_bytes()).hexdigest() == digest, f"{path.name} changed"

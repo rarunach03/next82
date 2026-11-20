@@ -33,6 +33,8 @@ models/*
 !models/game_level.txt
 !models/game_level_metrics.json
 !models/game_level_calibration.png
+!models/improve.json
+!models/ablation.png
 !data/raw/current_rosters/
 data/raw/current_rosters/*
 !data/raw/current_rosters/*.parquet
