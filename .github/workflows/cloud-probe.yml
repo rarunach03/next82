@@ -1,0 +1,46 @@
+name: cloud probe
+
+# Manual diagnostic: which of the daily refresh's data sources can GitHub's servers
+# reach? Runs scripts/cloud_probe.py on Linux, macOS and Windows runners (they use
+# different networks) and, if the CLAUDE_CODE_OAUTH_TOKEN secret is set, tries a tiny
+# Claude Code web search, the tool the news step uses.
+on:
+  workflow_dispatch:
+  push:
+    branches: [cloud-probe]
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: pip install nba_api pandas pyarrow pdfplumber requests && pip install --no-deps -e .
+      - run: python scripts/cloud_probe.py
+      - name: Raw request to stats.nba.com with browser headers
+        if: runner.os == 'Linux'
+        run: |
+          curl -s -m 30 -o /dev/null -w "%{http_code} in %{time_total}s\n" \
+            -H "User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130 Safari/537.36" \
+            -H "Referer: https://www.nba.com/" -H "Origin: https://www.nba.com" -H "Accept: application/json" \
+            "https://stats.nba.com/stats/scheduleleaguev2?LeagueID=00&Season=2026-27" || echo "timed out or failed"
+      - name: Claude Code web search
+        if: runner.os == 'Linux'
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: |
+          if [ -z "$CLAUDE_CODE_OAUTH_TOKEN" ]; then echo "No CLAUDE_CODE_OAUTH_TOKEN secret; skipped"; exit 0; fi
+          npm install -g @anthropic-ai/claude-code >/dev/null 2>&1
+          claude -p "Use web search once to find today's top NBA headline. Reply with one line." \
+            --tools WebSearch --allowedTools WebSearch --permission-mode dontAsk --max-budget-usd 1 \
+            --output-format json | python -c "import json,sys; r=json.load(sys.stdin); print('is_error:', r.get('is_error'), '|', (r.get('result') or '')[:200])"
