@@ -1,0 +1,39 @@
+name: cloud probe workarounds
+
+# Manual diagnostic: free workarounds for stats.nba.com blocking GitHub's servers
+# (long timeouts with retries and backoff, IPv6, HTTP/2) and whether alternative public
+# sources for the same data respond.
+on:
+  workflow_dispatch:
+  push:
+    branches: [cloud-probe]
+
+permissions:
+  contents: read
+
+jobs:
+  workarounds:
+    runs-on: ubuntu-latest
+    steps:
+      - name: stats.nba.com with browser headers, retries and backoff, IPv4, IPv6 and HTTP/2
+        run: |
+          UA="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130 Safari/537.36"
+          URL="https://stats.nba.com/stats/commonallplayers?IsOnlyCurrentSeason=1&LeagueID=00&Season=2026-27"
+          H=(-H "User-Agent: $UA" -H "Referer: https://www.nba.com/" -H "Origin: https://www.nba.com" -H "Accept: application/json, text/plain, */*" -H "Accept-Language: en-US,en;q=0.9" -H "x-nba-stats-origin: stats" -H "x-nba-stats-token: true")
+          for attempt in 1 2 3; do
+            echo "IPv4 attempt $attempt: $(curl -4 -s -m 90 -o /dev/null -w '%{http_code} in %{time_total}s' "${H[@]}" "$URL" || echo failed)"
+            sleep $((attempt * 20))
+          done
+          echo "IPv6: $(curl -6 -s -m 60 -o /dev/null -w '%{http_code} in %{time_total}s' "${H[@]}" "$URL" 2>&1 || echo 'failed (no IPv6 route)')"
+          echo "HTTP/2: $(curl --http2 -s -m 60 -o /dev/null -w '%{http_code} in %{time_total}s' "${H[@]}" "$URL" || echo failed)"
+          echo "nba.com page: $(curl -s -m 30 -o /dev/null -w '%{http_code} in %{time_total}s' -H "User-Agent: $UA" https://www.nba.com/stats || echo failed)"
+      - name: Alternative public sources
+        run: |
+          for url in \
+            "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard" \
+            "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams/1/roster" \
+            "https://www.basketball-reference.com/leagues/NBA_2027_games.html" \
+            "https://data.nba.net/prod/v1/today.json" \
+            "https://cdn.nba.com/static/json/liveData/scoreboard/todaysScoreboard_00.json"; do
+            echo "$(curl -s -m 30 -o /dev/null -w '%{http_code} in %{time_total}s' -A 'Mozilla/5.0' "$url" || echo failed) | $url"
+          done
