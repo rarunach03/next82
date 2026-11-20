@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { BrowserRouter, Link, Navigate, Route, Routes, useLocation } from 'react-router'
 import SearchBox from './components/SearchBox'
 import { latestFinishedSeason, shortDate, useIndex } from './data'
+import { staleDate, staleSince } from './freshness'
 import Home from './pages/Home'
 import MyRoster from './pages/MyRoster'
 import Rankings from './pages/Rankings'
@@ -57,6 +58,7 @@ function Shell() {
           <p className="py-16 text-muted">Loading forecasts…</p>
         ) : (
           <>
+            <StaleDataNotice index={index} />
             <StaleWarning index={index} />
             <Routes>
               <Route path="/" element={<Home index={index} />} />
@@ -157,8 +159,12 @@ function NavMenu({ label, items, align = 'left' }: { label: string; items: NavIt
 /** How fresh the numbers are, under the logo on every page: games through a date, or before the season. */
 function DataDate({ index }: { index: Index }) {
   const { meta } = index
+  const stale = staleSince(meta) !== null
   return (
-    <span className="mt-0.5 block text-[11px] font-medium tracking-wide whitespace-nowrap text-faint">
+    <span
+      className={`mt-0.5 block text-[11px] font-medium tracking-wide whitespace-nowrap ${stale ? 'text-accent' : 'text-faint'}`}
+      title={stale ? 'Updates are delayed' : undefined}
+    >
       {meta.seasonStarted && meta.soFarThrough ? (
         <>
           <span className="sm:hidden">Thru</span>
@@ -167,7 +173,21 @@ function DataDate({ index }: { index: Index }) {
       ) : (
         'Preseason'
       )}
+      {stale && <span aria-hidden="true"> ⚠</span>}
     </span>
+  )
+}
+
+/** Shown when the daily refresh hasn't run for more than two days. */
+function StaleDataNotice({ index }: { index: Index }) {
+  const since = staleSince(index.meta)
+  if (!since) return null
+  return (
+    <p role="status" className="mt-4 rounded-xl border border-accent/40 bg-accent/10 px-4 py-3 text-sm">
+      <span className="font-semibold">Updates are delayed.</span> The data was last refreshed on {staleDate(since)}
+      {index.meta.seasonStarted && index.meta.soFarThrough && <> (games through {shortDate(index.meta.soFarThrough)})</>}, so
+      recent games and injury news may be missing.
+    </p>
   )
 }
 
