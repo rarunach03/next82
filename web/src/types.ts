@@ -13,6 +13,22 @@ export interface Accuracy {
   updatedMae?: number
   updatedBestBaseline?: string
   updatedBestBaselineMae?: number
+  /** Test-season accuracy of the model behind this season's frozen preseason forecasts. */
+  frozenModelMae?: number
+  frozenModelMedianError?: number
+  /** A newer model now makes the updated forecast (and future preseason forecasts). */
+  modelChanged?: boolean
+  linearMae?: number
+  /** What each feature group is worth, on validation seasons (next82.improve). */
+  ablation?: Ablation | null
+}
+
+export interface Ablation {
+  validationSeasons: string[]
+  /** Average miss with every feature, in games. */
+  allFeatures: number
+  /** alone: average miss using only the group; without: extra miss when it's left out. */
+  groups: { name: string; alone: number; without: number }[]
 }
 
 export interface Meta {

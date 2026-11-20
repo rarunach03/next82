@@ -20,7 +20,7 @@ from next82 import (accuracy, auto_overrides, back_to_back, config, data, evalua
                     injuries, overrides, rookies)
 from next82.intervals import tier
 from next82.explain import GAMES, similar_comebacks, top_factors
-from next82.preseason import load_forecasts, load_ranges
+from next82.preseason import FROZEN_MODEL, load_forecasts, load_ranges
 from next82.train import HISTORY_PATH, METRICS_PATH, PAST_COMEBACKS_PATH
 
 OUT_DIR = config.ROOT / "web" / "public" / "data"
@@ -257,6 +257,26 @@ def write_game_beta(forecasts: pd.DataFrame, rosters: pd.DataFrame | None, today
     return True
 
 
+def ablation_summary() -> dict | None:
+    """What each feature group is worth on validation (next82.improve), for How it works."""
+    from next82 import improve
+
+    if not improve.RESULTS_PATH.exists():
+        return None
+    a = json.loads(improve.RESULTS_PATH.read_text()).get("ablation")
+    if not a:
+        return None
+    return {
+        "validationSeasons": a["validation_seasons"],
+        "allFeatures": round(a["all_features"]["mean"], 2),
+        "groups": sorted(
+            ({"name": name, "alone": round(a["alone"][name]["mean"], 2), "without": round(a["without"][name]["change"], 3)}
+             for name in a["without"]),
+            key=lambda g: g["alone"],
+        ),
+    }
+
+
 def write_accuracy(rosters: pd.DataFrame | None):
     """accuracy.json: the frozen preseason forecast graded against games so far."""
     logs = data.saved_season_logs()
@@ -265,9 +285,10 @@ def write_accuracy(rosters: pd.DataFrame | None):
     graded = accuracy.season_accuracy(load_forecasts(), rosters, *logs)
     if graded is not None:
         metrics = json.loads(METRICS_PATH.read_text())
+        # Graded forecasts are the frozen ones: quote the test result of the model that made them.
         graded["testSeasons"] = {
             "seasons": metrics["test_seasons"],
-            "model": round(metrics["results"][metrics["final_model"]]["mae_all"], 1),
+            "model": round(metrics["results"][FROZEN_MODEL]["mae_all"], 1),
             "bestBaseline": round(min(metrics["results"][k]["mae_all"] for k in ("Same as last year", "3-year average")), 1),
         }
         write_json(OUT_DIR / "accuracy.json", graded)
@@ -589,6 +610,12 @@ def main():
                 "bestBaselineMae": round(results[best_baseline]["mae_all"], 1),
                 "comebackHealthyMae": round(metrics["comeback"]["mae_healthy_two_part"], 1),
                 "testSeasons": metrics["test_seasons"],
+                # The model behind this season's frozen preseason forecasts, if a newer one took over.
+                "frozenModelMae": round(results[FROZEN_MODEL]["mae_all"], 1),
+                "frozenModelMedianError": round(results[FROZEN_MODEL]["median_error_all"], 1),
+                "modelChanged": metrics["final_model"] != FROZEN_MODEL,
+                "linearMae": round(results["Linear regression"]["mae_all"], 1),
+                "ablation": ablation_summary(),
                 **in_season_accuracy(),
             },
         },

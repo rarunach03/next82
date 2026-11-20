@@ -225,3 +225,41 @@ def test_game_beta_live_priors_match_training_priors():
     shared = live.index.intersection(trained.index)
     assert len(shared) > 300
     pd.testing.assert_frame_equal(live.loc[shared], trained.loc[shared], check_dtype=False)
+
+
+def test_frozen_forecasts_keep_their_own_accuracy(out):
+    """The live grading and the preseason note quote the model that made the frozen
+    forecasts, even when a newer model makes the updated forecast."""
+    from next82.preseason import FROZEN_MODEL
+
+    metrics = json.loads(METRICS_PATH.read_text())
+    frozen = metrics["results"][FROZEN_MODEL]
+    acc = json.loads((out / "index.json").read_text())["meta"]["accuracy"]
+    assert acc["frozenModelMae"] == round(frozen["mae_all"], 1)
+    assert acc["modelMae"] == round(metrics["results"][metrics["final_model"]]["mae_all"], 1)
+    assert acc["modelChanged"] == (metrics["final_model"] != FROZEN_MODEL)
+    graded = out / "accuracy.json"
+    if graded.exists():
+        assert json.loads(graded.read_text())["testSeasons"]["model"] == round(frozen["mae_all"], 1)
+    if acc["ablation"]:
+        assert {g["name"] for g in acc["ablation"]["groups"]} >= {"Minutes and workload", "Games played history"}
+
+
+def test_updated_forecast_uses_the_current_season_models_preseason_input():
+    import pandas as pd
+
+    from next82 import in_season
+    from next82.preseason import load_forecasts
+    from next82.train import FORECASTS_PATH
+
+    snap = in_season.predict_current()
+    if snap is None:
+        pytest.skip("no season in progress")
+    current = pd.read_parquet(FORECASTS_PATH).set_index("PLAYER_ID").pred_share
+    frozen = load_forecasts().set_index("PLAYER_ID").pred_share
+    shared = snap.PLAYER_ID[snap.PLAYER_ID.isin(current.index)]
+    assert len(shared) > 300
+    got = snap.set_index("PLAYER_ID").preseason_share.loc[shared]
+    assert (got - current.loc[shared]).abs().max() < 1e-9
+    # The frozen file is a different (older) model's output, and stays untouched.
+    assert (frozen.loc[shared] - current.loc[shared]).abs().max() > 0

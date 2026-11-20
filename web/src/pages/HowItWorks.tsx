@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router'
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import CalibrationChart from '../components/CalibrationChart'
 import { baselineText, shortDate, useAccuracy, useGames } from '../data'
-import type { AccuracyMethod, GameBetaModel, Meta, SeasonAccuracy } from '../types'
+import type { Ablation, AccuracyMethod, GameBetaModel, Meta, SeasonAccuracy } from '../types'
 
 // Categorical slots 1-3 of the project's validated dark palette (colorblind-safe on
 // the dark surface, all pairs); the forecast takes the orange to match the site accent.
@@ -168,13 +168,24 @@ export default function HowItWorks({ meta }: { meta: Meta }) {
           .
         </p>
       </Section>
+        {a.ablation && <WhatMatters ablation={a.ablation} />}
       </Part>
 
       <Part id="accuracy" title="How accurate they are">
       <Section title="On past seasons">
         <p>
-          The preseason model was trained on seasons up to 2022-23 and tested on {a.testSeasons.join(' and ')}, which it
-          never saw. Settings were chosen on separate validation seasons, so the test seasons only measure accuracy.
+          The season model was trained on seasons up to 2022-23 and tested on {a.testSeasons.join(' and ')}, which it
+          never saw. Every choice (inputs, settings) was made on earlier validation seasons, so the test seasons only
+          measure accuracy.
+          {a.modelChanged && a.frozenModelMae !== undefined && (
+            <>
+              {' '}
+              The current model blends a LightGBM model (80%) with linear regression (20%): the two make different
+              mistakes, so together they miss less ({a.modelMae} games, against {a.frozenModelMae} for LightGBM alone and{' '}
+              {a.linearMae} for linear regression alone). It makes the updated forecast and future preseason forecasts;
+              this season's preseason forecasts stay as frozen, made by LightGBM alone.
+            </>
+          )}
         </p>
         <dl className="grid gap-px overflow-hidden rounded-xl border border-line bg-line sm:grid-cols-2">
           <div className="bg-surface px-4 py-4">
@@ -465,6 +476,72 @@ function GameBetaSection({ model: m }: { model: GameBetaModel }) {
           return after a regular misses a single game.
         </p>
       </Section>
+    </div>
+  )
+}
+
+/** The ablation: each feature group's validation miss on its own, and the extra miss without it. */
+function WhatMatters({ ablation: ab }: { ablation: Ablation }) {
+  const worst = Math.max(...ab.groups.map((g) => g.alone))
+  const best = Math.min(ab.allFeatures, ...ab.groups.map((g) => g.alone))
+  const most = Math.max(...ab.groups.map((g) => g.without), 0.01)
+  const span = (v: number) => `${Math.max(4, ((v - best + 0.5) / (worst - best + 0.5)) * 100)}%`
+  return (
+    <div id="what-matters" className="scroll-mt-20">
+      <Section title="What matters most">
+        <p>
+          To see what the season model relies on, it was retrained with only one group of inputs, and again with each
+          group left out, on the {ab.validationSeasons[0]} to {ab.validationSeasons.at(-1)} seasons (each predicted from
+          earlier ones). With every input it misses by {ab.allFeatures} games. Past games played tell it the most on their
+          own; minutes and workload add the most on top of everything else, then absences (the injury history in the
+          game logs). Groups overlap, so leaving one out can cost little when another carries the same information.
+        </p>
+      </Section>
+      <div className="mt-4 max-w-2xl overflow-x-auto rounded-xl border border-line bg-surface">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-line text-left text-xs tracking-wide text-faint uppercase">
+              <th className="py-2.5 pr-2 pl-4 font-medium">Inputs</th>
+              <th className="py-2.5 pr-2 font-medium">Miss using only these</th>
+              <th className="py-2.5 pr-4 text-right font-medium">Extra miss without</th>
+            </tr>
+          </thead>
+          <tbody>
+            {ab.groups.map((g) => (
+              <tr key={g.name} className="border-b border-line/60 last:border-0">
+                <td className="py-2 pr-2 pl-4 text-ink">{g.name}</td>
+                <td className="py-2 pr-2">
+                  <div className="flex items-center gap-2">
+                    <span className="relative hidden h-2 w-28 rounded-full bg-surface-2 sm:block" aria-hidden>
+                      <span className="absolute inset-y-0 left-0 rounded-full bg-up" style={{ width: span(g.alone) }} />
+                    </span>
+                    <span className="tabular text-muted">{g.alone.toFixed(1)}</span>
+                  </div>
+                </td>
+                <td className="py-2 pr-4">
+                  <div className="flex items-center justify-end gap-2">
+                    <span className="relative hidden h-2 w-20 rounded-full bg-surface-2 sm:block" aria-hidden>
+                      <span
+                        className="absolute inset-y-0 left-0 rounded-full bg-accent"
+                        style={{ width: `${(Math.max(g.without, 0) / most) * 100}%` }}
+                      />
+                    </span>
+                    <span className="tabular w-12 text-right text-muted">
+                      {g.without > 0 ? '+' : g.without < 0 ? '−' : ''}
+                      {Math.abs(g.without).toFixed(2)}
+                    </span>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="mt-2 max-w-2xl text-xs text-faint">
+        Average miss in games; lower is better in the middle column, bigger means more important on the right. New inputs
+        were tried too (injury detail, workload trends, usage changes, age interactions, durability streaks, production);
+        none helped enough on these seasons to keep.
+      </p>
     </div>
   )
 }

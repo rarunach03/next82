@@ -231,7 +231,8 @@ function Forecasts({ p, meta }: { p: PlayerDetail; meta: Meta }) {
       {!p.comeback && (
         <p className="mt-4 text-sm text-faint">
           The preseason forecast was made before the season started and stays fixed: its average miss is{' '}
-          {meta.accuracy.modelMae} games, and half land within {Math.round(meta.accuracy.modelMedianError)}. The expected
+          {meta.accuracy.frozenModelMae ?? meta.accuracy.modelMae} games, and half land within{' '}
+          {Math.round(meta.accuracy.frozenModelMedianError ?? meta.accuracy.modelMedianError)}. The expected
           number adds games played so far to a fresh forecast for the games left
           {meta.accuracy.updatedMae !== undefined && <>, which misses the rest of a season by {meta.accuracy.updatedMae} games on average</>}
           .
