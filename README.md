@@ -73,14 +73,17 @@ teams. No ads or paid features.
 
 | Forecast | Tested on | Average miss | Best simple guess |
 |---|---|---|---|
-| Season model, current (LightGBM + linear blend) | 2023-24, 2024-25 | 15.4 games | 17.2 (3-season average) |
-| Season model behind the frozen 2026-27 preseason forecasts (LightGBM) | 2023-24, 2024-25 | 15.6 games | 17.2 |
+| Season model, current (LightGBM + linear blend) | 2024-25, 2025-26 | 15.4 games | 17.2 (3-season average) |
+| Season model behind the frozen 2026-27 preseason forecasts (LightGBM) | 2024-25, 2025-26 | 15.6 games | 17.2 |
 | Updated forecast (rest of season) | 2024-25, 2025-26 | 7.5 games | 8.0 (pace/preseason blend) |
 | Updated forecast, players currently out 5+ games | 2024-25, 2025-26 | 6.5 games | 7.6 (current pace) |
-| Comeback players, games if healthy | 2000-01 to 2022-23 | 15.3 games | 23.4 (3-season average) |
+| Comeback players, games if healthy | 2001-02 to 2025-26 | 15.1 games | 23.2 (3-season average) |
 
-Settings and feature choices were made on separate validation seasons, so the test seasons
-only measure accuracy. Half of preseason forecasts land within 11 games.
+"Tested on" is the season being forecast (each season-model forecast uses data through the season
+before). Settings and feature choices were made on separate validation seasons, so the test seasons
+only measure accuracy. Half of preseason forecasts land within about 11 games (11.3 for the frozen
+model, 11.5 for the blend). Comeback players are scored season by season, each season predicted by
+models trained only on earlier ones.
 
 ## Setup
 
@@ -178,8 +181,10 @@ latest return the low end (0 more games if there's no latest return, e.g. when i
 season-ending).
 
 1. **Automatic, from the NBA's official injury report** (`next82.injuries`, `next82.auto_overrides`).
-   The refresh reads the latest report once a day and stores only the parsed facts (player, status,
-   reason, body part, injury type, report time and link), never the PDF. A player listed Out with a
+   Each cloud refresh reads the latest report and stores only the parsed facts (player, status,
+   reason, body part, injury type, report time and link), never the PDF. The season's log keeps one
+   report per day (the latest read that day); days the refresh missed are filled in from the NBA's
+   archive with that day's final report (up to 30 days back). A player listed Out with a
    serious type in `data/recovery_table.csv` gets an estimated return: injury start + the fast end of
    real NBA recoveries for that injury, with no latest return if it can be season-ending. The injury
    start is the later of his last game and his first listing with this injury, unless he was already
@@ -211,15 +216,17 @@ season-ending).
    override. It skips players who got a news row in the last 7 days unless their report status
    changed. It runs when 3 or more days have passed since the last run, right away when a new player
    is listed Out with a serious injury type, or with `--force`; the state lives in
-   `.git/next82-news-state.json`. Claude Code runs in a temporary folder holding only a copy of the
+   `data/news_state.json`, committed so the schedule holds wherever the search runs. Claude Code runs in a temporary folder holding only a copy of the
    news file, with `--restricted --tools WebSearch,WebFetch,Read,Edit`, Read and Edit allowed only on
    that file, and `--permission-mode dontAsk` (no shell, no other files, no git). It's told to add a
    row only when a dated source clearly states a timeline, never to guess, and that "out for the
    season" means a return after the regular season ends. Its rows are then checked in Python (right
    columns, a player it was asked about, valid dates after the injury and the source, a source URL
    that resolves); valid rows are merged, bad ones rejected, and every added, changed or rejected row
-   is printed to the refresh log. Timeout 25 minutes, budget cap $10 a run. It finds `claude` on the
-   PATH, then the copy bundled with the VS Code extension (`NEXT82_CLAUDE` overrides).
+   is printed to the refresh log. Timeout 25 minutes, budget cap $10 a run. It uses `NEXT82_CLAUDE` if
+   set, then the standalone install (`~/.local/bin/claude`), then `claude` on the PATH, then the copy
+   bundled with the VS Code extension. A news timeline applies while the player is listed Out and
+   lapses once its return window has passed.
 3. **Manual**: `data/overrides.csv` wins over the automatic estimate and over news found before
    the manual row was added: `player_id, player_name, status, earliest_return,
    latest_return, estimated, note, source_url, source_url_2, date_added, review_by` (return dates and
@@ -238,16 +245,17 @@ classified as fractures too, so a tibia or fibula stress fracture gets the traum
 ## How it works
 
 - **Data:** regular-season stats, bios and game logs for 1996-97 to 2025-26 from stats.nba.com
-  via nba_api, plus this season's games. There's no public injury data, so long absences come
-  from matching each player's game log against their team's schedule.
+  via nba_api, plus this season's games. Official injury reports only go back to 2019-20 (they feed
+  the updated forecast, below), so the season model finds long absences by matching each player's
+  game log against their team's schedule.
 - **Season model** (`train.py`): 0.8 LightGBM + 0.2 linear regression on 12,300 past
   player-seasons (the blend misses less than either alone; this season's frozen preseason
   forecasts came from LightGBM alone). The target is the share of the schedule played, so
   shortened seasons compare fairly. 27 inputs: age, experience, minutes, games played in each of
   the last three seasons, long absences, games missed at the start or end of a season, and
   comeback inputs. SHAP values explain each forecast (exactly, for both parts of the blend).
-- **Improving it** (`improve.py`): every choice on five rolling validation seasons (2018-19 to
-  2022-23), the test seasons read once at the end. Ablation: minutes and workload matter most on
+- **Improving it** (`improve.py`): every choice on five rolling validation seasons (forecasting
+  2019-20 to 2023-24), the test seasons read once at the end. Ablation: minutes and workload matter most on
   top of everything else, then absences; past games played is the strongest group on its own.
   Six new feature groups were tried and none kept (`models/improve.json`, `models/ablation.png`).
 - **Updated forecast** (`in_season.py`): trained on snapshots of every player every 14 days
@@ -286,8 +294,10 @@ src/next82/
   config.py        paths, seasons, cutoffs
   data.py          nba_api downloads (history, rosters, games so far, draft)
   features.py      player-season table
-  models.py        baselines, ridge regression, LightGBM, quantile models
+  models.py        baselines, ridge regression, LightGBM, the blend, quantile models
+  evaluate.py      train/test split and error measures
   train.py         preseason models, evaluation, forecasts and ranges
+  improve.py       season-model ablation, candidate features, tuning, one-time final test
   preseason.py     freezing and loading the preseason forecast
   in_season.py     updated (rest-of-season) forecast
   intervals.py     likely ranges, calibration, availability tiers
@@ -298,6 +308,8 @@ src/next82/
   auto_overrides.py  automatic return estimates from the report and recovery table
   news.py          automatic news search for team timelines (Claude Code, validated)
   injury_history.py  past injury reports for model features
+  injury_features.py  does adding injury-report features help the updated forecast?
+  game_level.py    game-by-game availability (beta): model, quality gates, upcoming games
   back_to_back.py  back-to-back rest rates
   explain.py       SHAP factors with readable labels
   export.py        the website's data (the only way data reaches the site)
@@ -313,15 +325,17 @@ tests/             pytest; tests needing the full downloaded data skip themselve
 
 ## Limitations
 
-- The model sees injury-report status (listed Out, serious injury type, trend) but not recovery
-  timelines; those enter through the adjustments above, and only for injuries with a cited recovery
-  study (others are logged and left to the model). This season's report log starts on Oct 26, 2026,
-  so the week-earlier features fill in from Nov 3.
+- The updated forecast sees injury-report status (listed Out, serious injury type, trend) but not
+  recovery timelines; those enter through the adjustments above: recovery studies for serious
+  injuries, team timelines from the news search for any injury, and manual adjustments. Injuries
+  with none of these are left to the model. This season's report log runs from Oct 26, 2026 (the
+  Oct 30 to Nov 11 days the refresh missed were filled in from the NBA's archive).
 - Injury start dates are estimated from the last game played, so a preseason injury can look older
   than it is (a still-out player past the typical recovery is treated as "back any day").
 - Forecasts assume the player is in the league. Players not on a roster who haven't played get
   no updated forecast.
-- The preseason edge over simple guessing is real but modest (15.4 vs 17.2 games).
+- The preseason edge over simple guessing is real but modest (15.6 games for this season's frozen
+  forecasts, 15.4 for the current model, vs 17.2 for the best simple guess).
 - Comeback forecasts can't see injury type or medical clearance.
 - The news search only finds what's published and stated clearly; vague reports ("no timeline",
   "day to day") add nothing, and unless the cloud has a Claude token it runs on the Mac, so it
@@ -335,8 +349,6 @@ tests/             pytest; tests needing the full downloaded data skip themselve
 - **NBA-specific recovery studies** where the table borrows from the NFL (fibula fractures, ankle
   dislocations, patellar tendon tears), and rows for concussions, plantar fascia and knee surgeries
   of unknown type, so more injuries get automatic estimates.
-- **Checking news rows against the injury report**: a news row stays until it's replaced; it could
-  also expire when the player is back in the lineup.
 - **Moving the stats download off the Mac** if stats.nba.com ever answers cloud servers (the rest
   of the refresh already runs in GitHub Actions).
 - **Grading the updated forecast** at the end of the season, alongside the preseason one.

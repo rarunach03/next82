@@ -8,7 +8,7 @@ export const GLOSSARY = {
     `How safe the games forecast is, judged from the low end of the likely range. Safe: even a bad outcome is ${safe}+ games. Risky: a bad outcome is under ${risky}. Moderate: in between. Only for players in a regular rotation.`,
   aboveReplacement: (pool: number) =>
     `Compared with the best player you could pick up for free (about the ${pool}th-best player per game). Zero means no better than a free agent.`,
-  cat9: '9-category leagues score points, rebounds, assists, steals, blocks, threes, field goal %, free throw % and turnovers. Values are how far above average a player is across all nine.',
+  cat9: '9-category leagues score points, rebounds, assists, steals, blocks, threes, field goal %, free throw % and turnovers. Values are how far above the average of the top 156 players (roughly everyone rostered in a 12-team league) a player is, added up across all nine.',
   durability:
     'Value lost to expected missed games: what the player would add by playing every game, minus their expected value.',
   noTier: {

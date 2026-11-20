@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { Link, useLocation } from 'react-router'
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import CalibrationChart from '../components/CalibrationChart'
-import { baselineText, shortDate, useAccuracy, useGames } from '../data'
+import { baselineText, seasonBefore, shortDate, useAccuracy, useGames } from '../data'
 import type { Ablation, AccuracyMethod, GameBetaModel, Meta, SeasonAccuracy } from '../types'
 
 // Categorical slots 1-3 of the project's validated dark palette (colorblind-safe on
@@ -83,8 +83,16 @@ export default function HowItWorks({ meta }: { meta: Meta }) {
         <p>
           The availability tier comes from the low end of the updated forecast's range: <em>Safe</em> if even a bad
           outcome is {meta.tierSafeLow}+ games, <em>Risky</em> if it's under {meta.setbackGames}, <em>Moderate</em> in
-          between. On past seasons, Safe players fell short of {meta.tierSafeLow} games about 3% of the time. Tiers are
-          only for players in a rotation role, since a bench player's games depend more on the coach than on health.
+          between.
+          {meta.accuracy.safeShortShare !== undefined && (
+            <>
+              {' '}
+              On the test seasons, Safe players fell short of {meta.tierSafeLow} games{' '}
+              {Math.max(1, Math.round(meta.accuracy.safeShortShare * 100))}% of the time.
+            </>
+          )}{' '}
+          Tiers are only for players in a rotation role, since a bench player's games depend more on the coach than on
+          health.
         </p>
       </Section>
 
@@ -104,7 +112,7 @@ export default function HowItWorks({ meta }: { meta: Meta }) {
         <p>
           These adjustments change the updated forecast, fantasy values and tiers. They never change the preseason
           forecast or the accuracy numbers, which stay model-only. Short-term things like illness, rest or a sprained
-          ankle are left to the model.
+          ankle are left to the model, unless the team announces a timeline.
         </p>
       </Section>
 
@@ -174,8 +182,8 @@ export default function HowItWorks({ meta }: { meta: Meta }) {
       <Part id="accuracy" title="How accurate they are">
       <Section title="On past seasons">
         <p>
-          The season model was trained on seasons up to 2022-23 and tested on {a.testSeasons.join(' and ')}, which it
-          never saw. Every choice (inputs, settings) was made on earlier validation seasons, so the test seasons only
+          The season model learned from seasons through {seasonBefore(a.testSeasons[0])} and was tested on forecasting{' '}
+          {a.testSeasons.join(' and ')}, which it never saw. Every choice (inputs, settings) was made on earlier validation seasons, so the test seasons only
           measure accuracy.
           {a.modelChanged && a.frozenModelMae !== undefined && (
             <>
@@ -192,7 +200,7 @@ export default function HowItWorks({ meta }: { meta: Meta }) {
             <dd className="font-display text-3xl font-bold text-accent">{a.modelMae} games</dd>
             <dt className="mt-1 text-sm">our average miss, full season</dt>
             <dd className="mt-1 text-xs text-faint">
-              Half within {Math.round(a.modelMedianError)} games · {Math.round(a.shareWithin16 * 100)}% within 16
+              Half within {a.modelMedianError} games · {Math.round(a.shareWithin16 * 100)}% within 16
             </dd>
           </div>
           <div className="bg-surface px-4 py-4">
@@ -221,9 +229,9 @@ export default function HowItWorks({ meta }: { meta: Meta }) {
       <Section title="What the forecasts can't do">
         <ul className="list-disc space-y-2 pl-5">
           <li>
-            The preseason forecast can't see injury news, and the updated forecast only knows recovery times for a few
-            serious injuries; for players not on the injury report, it can't tell an injury from rest, a benching or a
-            suspension.
+            The preseason forecast can't see injury news. The updated forecast knows recovery times only from the recovery
+            studies (a few serious injuries), team timelines found in the news, and manual adjustments; for players not on
+            the injury report, it can't tell an injury from rest, a benching or a suspension.
           </li>
           <li>
             Forecasts assume the player is in the league; players not on a roster who haven't played get no updated

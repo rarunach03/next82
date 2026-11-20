@@ -118,6 +118,12 @@ export function latestFinishedSeason(today = new Date()): string {
   return `${start}-${String(start + 1).slice(-2)}`
 }
 
+/** The season before: "2024-25" -> "2023-24". */
+export function seasonBefore(season: string): string {
+  const start = Number(season.slice(0, 4)) - 1
+  return `${start}-${String(start + 1).slice(-2)}`
+}
+
 /** How each simple-guess baseline is described to readers. */
 export function baselineText(name: string): string {
   return name === 'Same as last year' ? "guessing last season's total" : "guessing each player's 3-season average"

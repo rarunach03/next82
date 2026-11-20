@@ -13,6 +13,8 @@ export interface Accuracy {
   updatedMae?: number
   updatedBestBaseline?: string
   updatedBestBaselineMae?: number
+  /** Test seasons: share of Safe rotation players who fell short of the Safe cutoff. */
+  safeShortShare?: number
   /** Test-season accuracy of the model behind this season's frozen preseason forecasts. */
   frozenModelMae?: number
   frozenModelMedianError?: number

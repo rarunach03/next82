@@ -181,13 +181,17 @@ def in_season_accuracy() -> dict:
     """Test-season accuracy of the rest-of-season model and its best baseline, if trained."""
     if not in_season.METRICS_PATH.exists():
         return {}
-    card = json.loads(in_season.METRICS_PATH.read_text())["test"]["all"]
+    metrics = json.loads(in_season.METRICS_PATH.read_text())
+    card = metrics["test"]["all"]
     baselines = {k: v for k, v in card.items() if k not in ("n", "Rest-of-season model")}
     best = min(baselines, key=baselines.get)
+    tiers = metrics.get("tiers", {}).get("rotation role", {})
     return {
         "updatedMae": round(card["Rest-of-season model"], 1),
         "updatedBestBaseline": best,
         "updatedBestBaselineMae": round(baselines[best], 1),
+        # On the test seasons, how often a Safe rotation player fell short of the Safe cutoff.
+        **({"safeShortShare": round(tiers["safe_under_cutoff"], 4)} if "safe_under_cutoff" in tiers else {}),
     }
 
 
@@ -267,7 +271,8 @@ def ablation_summary() -> dict | None:
     if not a:
         return None
     return {
-        "validationSeasons": a["validation_seasons"],
+        # Rows are labeled by the season their inputs come from; readers want the season forecast.
+        "validationSeasons": [next_season(v) for v in a["validation_seasons"]],
         "allFeatures": round(a["all_features"]["mean"], 2),
         "groups": sorted(
             ({"name": name, "alone": round(a["alone"][name]["mean"], 2), "without": round(a["without"][name]["change"], 3)}
@@ -287,7 +292,7 @@ def write_accuracy(rosters: pd.DataFrame | None):
         metrics = json.loads(METRICS_PATH.read_text())
         # Graded forecasts are the frozen ones: quote the test result of the model that made them.
         graded["testSeasons"] = {
-            "seasons": metrics["test_seasons"],
+            "seasons": [next_season(v) for v in metrics["test_seasons"]],   # the seasons forecast
             "model": round(metrics["results"][FROZEN_MODEL]["mae_all"], 1),
             "bestBaseline": round(min(metrics["results"][k]["mae_all"] for k in ("Same as last year", "3-year average")), 1),
         }
@@ -609,7 +614,8 @@ def main():
                 "bestBaseline": best_baseline,
                 "bestBaselineMae": round(results[best_baseline]["mae_all"], 1),
                 "comebackHealthyMae": round(metrics["comeback"]["mae_healthy_two_part"], 1),
-                "testSeasons": metrics["test_seasons"],
+                # The seasons forecast (rows carry the season their inputs come from).
+                "testSeasons": [next_season(v) for v in metrics["test_seasons"]],
                 # The model behind this season's frozen preseason forecasts, if a newer one took over.
                 "frozenModelMae": round(results[FROZEN_MODEL]["mae_all"], 1),
                 "frozenModelMedianError": round(results[FROZEN_MODEL]["median_error_all"], 1),
