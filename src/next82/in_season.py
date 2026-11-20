@@ -37,6 +37,8 @@ METRICS_PATH = config.MODELS_DIR / "in_season_metrics.json"
 SNAPSHOTS_PATH = config.PROCESSED_DIR / "in_season_snapshots.parquet"
 
 SNAPSHOT_DAYS = 14
+# The season model whose out-of-time forecasts are the preseason_share input.
+PRESEASON_MODEL = "LightGBM"
 # The first season used for training: earlier seasons have too little history
 # before them to make an out-of-time preseason forecast.
 FIRST_SEASON = "2000-01"
@@ -153,7 +155,7 @@ def snapshot_dates(team_games: pd.DataFrame) -> list[pd.Timestamp]:
     return list(pd.date_range(start, end, freq=f"{SNAPSHOT_DAYS}D"))
 
 
-def out_of_time_preseason_shares(table: pd.DataFrame) -> pd.Series:
+def out_of_time_preseason_shares(table: pd.DataFrame, model_name: str | None = None) -> pd.Series:
     """Each player's preseason forecast share for every past season, made by a model
     trained only on seasons whose results were known before that season started.
 
@@ -169,7 +171,7 @@ def out_of_time_preseason_shares(table: pd.DataFrame) -> pd.Series:
         train = labeled[labeled.season_idx <= target - 2]
         if rows.empty or train.empty:
             continue
-        shares.loc[rows.index] = models.predict(models.fit("LightGBM", train), rows)
+        shares.loc[rows.index] = models.predict(models.fit(model_name or PRESEASON_MODEL, train), rows)
     return shares
 
 

@@ -61,6 +61,29 @@ def lightgbm():
     )
 
 
+# Share of the blend given to LightGBM; the rest goes to linear regression. Chosen on
+# rolling validation folds (feature seasons 2018-19 to 2022-23), not the test seasons.
+BLEND_WEIGHT = 0.8
+
+
+class Blend:
+    """BLEND_WEIGHT x LightGBM + (1 - BLEND_WEIGHT) x linear regression, on the same inputs.
+    The two make different mistakes, so the average misses less than either."""
+
+    def __init__(self, weight: float = BLEND_WEIGHT):
+        self.weight = weight
+
+    def fit(self, X: pd.DataFrame, y: pd.Series):
+        self.tree = lightgbm().fit(X, y)
+        self.linear = linear().fit(X, y)
+        # Average transformed inputs, for exact SHAP values of the linear part (explain.py).
+        self.linear_background_ = self.linear[:-1].transform(X).mean(axis=0)
+        return self
+
+    def predict(self, X: pd.DataFrame) -> np.ndarray:
+        return self.weight * self.tree.predict(X) + (1 - self.weight) * self.linear.predict(X)
+
+
 def quantile_model(alpha: float):
     """Same settings as the main model, predicting the `alpha` quantile instead of the median."""
     return lightgbm().set_params(objective="quantile", alpha=alpha)
@@ -78,6 +101,7 @@ MODELS = {
     "3-year average": ThreeYearAverage,
     "Linear regression": linear,
     "LightGBM": lightgbm,
+    "LightGBM + linear blend": Blend,
 }
 
 

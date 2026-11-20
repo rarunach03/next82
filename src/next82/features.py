@@ -77,6 +77,22 @@ COMEBACK_FEATURES = [
 FEATURES = BASE_FEATURES + COMEBACK_FEATURES
 TARGET = "gp_share_next"
 
+# Candidate feature groups for improving the season model (next82.improve). They're in
+# the table, but only groups that help on validation are added to FEATURES. Each uses
+# only the player's season and earlier seasons.
+CANDIDATE_GROUPS = {
+    "Absence detail": ["n_gaps_5", "gap_games", "gap_games_lag1", "recurring_major_3yr", "missed_last20"],
+    "Workload": ["mpg_trend", "heavy_seasons_3yr", "minutes_3yr", "share_40min"],
+    "Usage change": ["usg_change", "min_share_change"],
+    "Age interactions": ["age_x_missed_3yr", "age_x_mpg"],
+    "Durability streaks": ["durable_streak", "durable_5yr"],
+    "Production": ["ppg", "pts_per36", "draft_number"],
+}
+CANDIDATES = [c for cols in CANDIDATE_GROUPS.values() for c in cols]
+# 70 of 82 games: a full, healthy season.
+DURABLE_SHARE = 70 / 82
+HEAVY_MPG = 34
+
 
 def _season_start(season: str) -> int:
     return int(season[:4])
@@ -251,6 +267,91 @@ def add_history(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def season_log_details(player_games: pd.DataFrame, schedules: pd.DataFrame) -> pd.DataFrame:
+    """Per player-season details from game logs: absences of 5+ games, games missed
+    mid-stint, games missed of the last team's final 20, share of 40-minute games."""
+    pg = player_games[["SEASON", "PLAYER_ID", "TEAM_ID", "GAME_ID", "MIN"]].merge(
+        schedules, on=["SEASON", "TEAM_ID", "GAME_ID"], how="inner"
+    ).sort_values(["SEASON", "PLAYER_ID", "GAME_DATE", "GAME_ID"])
+    new_stint = pg.groupby(["SEASON", "PLAYER_ID"]).TEAM_ID.transform(lambda t: t != t.shift())
+    pg["stint"] = new_stint.groupby([pg.SEASON, pg.PLAYER_ID]).cumsum()
+    pg["gap"] = (pg.game_idx - pg.groupby(["SEASON", "PLAYER_ID", "stint"]).game_idx.shift() - 1).fillna(0)
+    by = pg.groupby(["SEASON", "PLAYER_ID"])
+    out = pd.DataFrame({
+        "n_gaps_5": by.gap.apply(lambda g: int((g >= 5).sum())),
+        "gap_games": by.gap.sum(),
+        "share_40min": by.MIN.apply(lambda m: float((pd.to_numeric(m, errors="coerce") >= 40).mean())),
+    })
+    # The last team's final 20 games (or fewer, if the player joined later): how many he missed.
+    last = pg[pg.stint == by.stint.transform("max")]
+    lb = last.groupby(["SEASON", "PLAYER_ID"])
+    window_start = (lb.team_n_games.first() - 20).clip(lower=0).combine(lb.game_idx.min(), max)
+    played = last.assign(start=last.set_index(["SEASON", "PLAYER_ID"]).index.map(window_start))
+    played = (played.game_idx >= played.start).groupby([played.SEASON, played.PLAYER_ID]).sum()
+    out["missed_last20"] = (lb.team_n_games.first() - window_start) - played
+    return out.reset_index()
+
+
+def _window(df: pd.DataFrame, col: str, n: int, fn: str, fill) -> pd.Series:
+    """Rolling `fn` over the player's last n seasons (this one included), seasons with no
+    row inside his span filled with `fill`. Uses only this and earlier seasons."""
+    by_player = df.sort_values("season_idx").groupby("PLAYER_ID")
+    return by_player.apply(
+        lambda g: g.set_index("season_idx")[col]
+        .reindex(range(g.season_idx.min(), g.season_idx.max() + 1), fill_value=fill)
+        .rolling(n, min_periods=1).agg(fn)
+        .reindex(g.season_idx).set_axis(g.index),
+        include_groups=False,
+    ).droplevel(0)
+
+
+def _streak(df: pd.DataFrame, flag: str) -> pd.Series:
+    """Seasons in a row (ending with this one) where `flag` holds; a season with no row breaks it."""
+    def run(g):
+        s = g.set_index("season_idx")[flag].reindex(range(g.season_idx.min(), g.season_idx.max() + 1), fill_value=False)
+        streak, out = 0, []
+        for v in s:
+            streak = streak + 1 if v else 0
+            out.append(streak)
+        return pd.Series(out, index=s.index).reindex(g.season_idx).set_axis(g.index)
+
+    return df.sort_values("season_idx").groupby("PLAYER_ID").apply(run, include_groups=False).droplevel(0)
+
+
+def add_candidates(df: pd.DataFrame, player_games: pd.DataFrame, schedules: pd.DataFrame,
+                   stats: pd.DataFrame, bio: pd.DataFrame) -> pd.DataFrame:
+    """Candidate features (CANDIDATE_GROUPS), from this and earlier seasons only."""
+    df = df.merge(season_log_details(player_games, schedules), on=["SEASON", "PLAYER_ID"], how="left")
+    totals = stats[["SEASON", "PLAYER_ID", "PTS"]].drop_duplicates(["SEASON", "PLAYER_ID"])
+    df = df.merge(totals, on=["SEASON", "PLAYER_ID"], how="left")
+    draft = bio[["PLAYER_ID", "SEASON", "DRAFT_NUMBER"]].assign(
+        draft_number=lambda b: pd.to_numeric(b.DRAFT_NUMBER, errors="coerce"))
+    df = df.merge(draft[["SEASON", "PLAYER_ID", "draft_number"]].drop_duplicates(["SEASON", "PLAYER_ID"]),
+                  on=["SEASON", "PLAYER_ID"], how="left")
+    # Sat-out seasons have no stats row: carry the draft pick forward from earlier seasons.
+    df = df.sort_values(["PLAYER_ID", "season_idx"])
+    df["draft_number"] = df.groupby("PLAYER_ID").draft_number.ffill()
+
+    prev = df[["PLAYER_ID", "season_idx", "gap_games", "usg_pct", "min_share"]].assign(season_idx=lambda d: d.season_idx + 1)
+    df = df.merge(prev.rename(columns={"gap_games": "gap_games_lag1", "usg_pct": "usg_lag1", "min_share": "min_share_lag1"}),
+                  on=["PLAYER_ID", "season_idx"], how="left")
+
+    df["recurring_major_3yr"] = _window(df.assign(major=(df.n_major_gaps > 0).astype(int)), "major", 3, "sum", fill=1)
+    df["mpg_trend"] = df.mpg - df.mpg_lag1
+    df["heavy_seasons_3yr"] = _window(df.assign(heavy=(df.mpg >= HEAVY_MPG).astype(int)), "heavy", 3, "sum", fill=0)
+    df["minutes_3yr"] = _window(df.assign(m=df.MIN.fillna(0) / 1000), "m", 3, "sum", fill=0.0)
+    df["usg_change"] = df.usg_pct - df.usg_lag1
+    df["min_share_change"] = df.min_share - df.min_share_lag1
+    df["age_x_missed_3yr"] = df.age * (1 - df.avg_gp_share_3yr)
+    df["age_x_mpg"] = df.age * df.mpg
+    durable = df.assign(durable=df.gp_share >= DURABLE_SHARE)
+    df["durable_streak"] = _streak(durable, "durable")
+    df["durable_5yr"] = _window(durable.assign(durable=durable.durable.astype(int)), "durable", 5, "sum", fill=0)
+    df["ppg"] = df.PTS / df.GP.where(df.GP > 0)
+    df["pts_per36"] = df.PTS / df.MIN.where(df.MIN > 0) * 36
+    return df.drop(columns=["usg_lag1", "min_share_lag1", "PTS"])
+
+
 def add_target(df: pd.DataFrame) -> pd.DataFrame:
     """Next season's gp_share, with the rules described in the module docstring."""
     last_idx = len(config.SEASONS) - 1
@@ -276,11 +377,18 @@ def add_target(df: pd.DataFrame) -> pd.DataFrame:
     return df[keep].reset_index(drop=True)
 
 
+def feature_rows() -> pd.DataFrame:
+    """Every player-season with its features (before targets are attached)."""
+    df = add_history(add_missed_seasons(season_table()))
+    return add_candidates(df, load("player_games"), team_schedules(load("team_games")), load("player_stats"),
+                          load("player_bio"))
+
+
 def build() -> pd.DataFrame:
-    df = add_target(add_history(add_missed_seasons(season_table())))
+    df = add_target(feature_rows())
     id_cols = ["SEASON", "season_idx", "PLAYER_ID", "PLAYER_NAME", "TEAM_ABBREVIATION", "GP", "season_games"]
     target_cols = [TARGET, "gp_next", "season_games_next", "is_forecast"]
-    feature_cols = list(dict.fromkeys(BASE_FEATURES + COMEBACK_FEATURES))
+    feature_cols = list(dict.fromkeys(BASE_FEATURES + COMEBACK_FEATURES + CANDIDATES))
     return df[id_cols + feature_cols + target_cols].sort_values(["season_idx", "PLAYER_ID"]).reset_index(drop=True)
 
 

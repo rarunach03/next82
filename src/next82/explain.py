@@ -82,10 +82,35 @@ def format_value(feature: str, value) -> str:
 
 
 def shap_values(model, X: pd.DataFrame) -> tuple[np.ndarray, float]:
-    """SHAP values in games (rows x features) and the base value in games."""
+    """SHAP values in games (rows x features) and the base value in games.
+
+    For a blend (models.Blend), SHAP values add up like the predictions: the weighted
+    tree values plus the linear model's exact ones, coefficient x (input - average input),
+    with each missing-value flag counted toward its feature.
+    """
+    from next82.models import Blend
+
+    if isinstance(model, Blend):
+        tree, tree_base = shap_values(model.tree, X)
+        lin, lin_base = _linear_shap(model, X[FEATURES])
+        w = model.weight
+        return w * tree + (1 - w) * lin, w * tree_base + (1 - w) * lin_base
     explainer = shap.TreeExplainer(model)
     values = explainer.shap_values(X[FEATURES]) * GAMES
     return values, float(np.ravel(explainer.expected_value)[0]) * GAMES
+
+
+def _linear_shap(model, X: pd.DataFrame) -> tuple[np.ndarray, float]:
+    """Exact SHAP values (in games) of the blend's linear model (imputer -> scaler -> ridge)."""
+    imputer, ridge = model.linear[0], model.linear[-1]
+    z = model.linear[:-1].transform(X)
+    parts = ridge.coef_ * (z - model.linear_background_)
+    values = parts[:, : X.shape[1]].copy()
+    if imputer.indicator_ is not None:
+        for k, feature in enumerate(imputer.indicator_.features_):
+            values[:, feature] += parts[:, X.shape[1] + k]
+    base = float(ridge.intercept_ + ridge.coef_ @ model.linear_background_)
+    return values * GAMES, base * GAMES
 
 
 def top_factors(row: pd.Series, n: int = 6) -> pd.DataFrame:
