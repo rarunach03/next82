@@ -328,7 +328,8 @@ tests/             pytest; tests needing the full downloaded data skip themselve
 - The updated forecast sees injury-report status (listed Out, serious injury type, trend) but not
   recovery timelines; those enter through the adjustments above: recovery studies for serious
   injuries, team timelines from the news search for any injury, and manual adjustments. Injuries
-  with none of these are left to the model. This season's report log runs from Oct 26, 2026 (the
+  with none of these are left to the model. Rookies' updated forecasts use the model without these
+  inputs (they made rookie forecasts worse on validation). This season's report log runs from Oct 26, 2026 (the
   Oct 30 to Nov 11 days the refresh missed were filled in from the NBA's archive).
 - Injury start dates are estimated from the last game played, so a preseason injury can look older
   than it is (a still-out player past the typical recovery is treated as "back any day").
