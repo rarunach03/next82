@@ -29,7 +29,9 @@ from sklearn.metrics import brier_score_loss, roc_auc_score
 from next82 import config, data, evaluate, explain, intervals, models
 from next82.features import FEATURES, TARGET, load_table
 
-FINAL_MODEL = "LightGBM"
+# 0.8 LightGBM + 0.2 linear regression (models.Blend): chosen on validation folds by
+# next82.improve, and better than LightGBM alone on the test seasons (15.44 vs 15.59).
+FINAL_MODEL = "LightGBM + linear blend"
 MODEL_PATH = config.MODELS_DIR / "lightgbm.joblib"
 METRICS_PATH = config.MODELS_DIR / "metrics.json"
 FORECASTS_PATH = config.PROCESSED_DIR / "forecasts.parquet"

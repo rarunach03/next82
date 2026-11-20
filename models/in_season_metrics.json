@@ -8,111 +8,111 @@
   "blend_k": 20,
   "params": {
     "num_leaves": 31,
-    "min_child_samples": 300,
+    "min_child_samples": 100,
     "n_estimators": 600
   },
   "test": {
     "all": {
       "n": 12376,
-      "Preseason forecast, pro-rated": 9.271199587014218,
-      "Current pace": 9.170076617970025,
-      "Blend of pace and preseason": 8.045870144655808,
-      "Rest-of-season model": 7.541516300878832
+      "Preseason forecast, pro-rated": 9.184466513285534,
+      "Current pace": 9.159502911726765,
+      "Blend of pace and preseason": 7.998144558670638,
+      "Rest-of-season model": 7.512844794256537
     },
     "first third of season": {
       "n": 4744,
-      "Preseason forecast, pro-rated": 13.643348342752638,
-      "Current pace": 14.467011365525154,
-      "Blend of pace and preseason": 12.083459507120557,
-      "Rest-of-season model": 11.692663133539146
+      "Preseason forecast, pro-rated": 13.505962926515217,
+      "Current pace": 14.439427008765763,
+      "Blend of pace and preseason": 11.98162499978661,
+      "Rest-of-season model": 11.638741217670844
     },
     "middle third": {
       "n": 3735,
-      "Preseason forecast, pro-rated": 9.191107010052262,
+      "Preseason forecast, pro-rated": 9.105197758350492,
       "Current pace": 8.457855602785395,
-      "Blend of pace and preseason": 7.775027530606022,
-      "Rest-of-season model": 7.302397772354345
+      "Blend of pace and preseason": 7.75077462737793,
+      "Rest-of-season model": 7.277841995286157
     },
     "last third": {
       "n": 3897,
-      "Preseason forecast, pro-rated": 4.025541921561264,
+      "Preseason forecast, pro-rated": 3.9996807332805964,
       "Current pace": 3.404484380175067,
-      "Blend of pace and preseason": 3.3903077191857456,
-      "Rest-of-season model": 2.717309765056
+      "Blend of pace and preseason": 3.3859545357617553,
+      "Rest-of-season model": 2.715432123349918
     },
     "currently out (5+ games)": {
       "n": 1730,
-      "Preseason forecast, pro-rated": 10.172706879660353,
+      "Preseason forecast, pro-rated": 9.973963491024634,
       "Current pace": 7.555774103350102,
-      "Blend of pace and preseason": 7.643762292850602,
-      "Rest-of-season model": 6.536964290458402
+      "Blend of pace and preseason": 7.596182120827542,
+      "Rest-of-season model": 6.539755150351171
     }
   },
   "range_adjustments": [
-    0.010934235912771074,
-    0.00031235507570067376,
-    0.0053690591507525864
+    0.013159971902503398,
+    0.0005033750045646616,
+    0.005853942583425642
   ],
   "range_calibration": {
     "all": {
       "n": 12376,
-      "coverage": 0.8029250161603103,
-      "avg_width": 23.9857556006282
+      "coverage": 0.8078539107950873,
+      "avg_width": 24.162558915221855
     },
     "first third": {
       "n": 4744,
-      "coverage": 0.825885328836425,
-      "avg_width": 38.44994038948242
+      "coverage": 0.8345278246205734,
+      "avg_width": 38.784857704600114
     },
     "middle third": {
       "n": 3735,
-      "coverage": 0.766532797858099,
-      "avg_width": 21.577072357049996
+      "coverage": 0.7668005354752343,
+      "avg_width": 21.721078037637565
     },
     "last third": {
       "n": 3897,
-      "coverage": 0.8098537336412626,
-      "avg_width": 8.686381537615649
+      "coverage": 0.8147292789325122,
+      "avg_width": 8.702139521064005
     },
     "currently out (5+ games)": {
       "n": 1730,
-      "coverage": 0.8369942196531792,
-      "avg_width": 20.593652522345145
+      "coverage": 0.8346820809248555,
+      "avg_width": 20.646296377455478
     },
     "hasn't played yet": {
       "n": 1933,
-      "coverage": 0.8297982410760476,
-      "avg_width": 38.67163438099006
+      "coverage": 0.8334195550957062,
+      "avg_width": 38.97409597046484
     }
   },
   "tiers": {
     "all": {
       "n": 12376,
-      "safe_share": 0.4054621848739496,
-      "risky_share": 0.30187459599224303,
-      "safe_under_cutoff": 0.023714627341570347,
-      "risky_under_cutoff": 0.5447002141327623
+      "safe_share": 0.406431803490627,
+      "risky_share": 0.3021978021978022,
+      "safe_under_cutoff": 0.024055666003976142,
+      "risky_under_cutoff": 0.5457219251336899
     },
     "rotation role": {
       "n": 7943,
-      "safe_share": 0.5411053758025934,
-      "risky_share": 0.15900793151202317,
-      "safe_under_cutoff": 0.02419730107026524,
-      "risky_under_cutoff": 0.4220110847189232
+      "safe_share": 0.5418607579000377,
+      "risky_share": 0.1601410046581896,
+      "safe_under_cutoff": 0.02462825278810409,
+      "risky_under_cutoff": 0.42374213836477986
     },
     "rotation role, first third": {
       "n": 3044,
-      "safe_share": 0.3708935611038108,
-      "risky_share": 0.23127463863337713,
-      "safe_under_cutoff": 0.05845881310894597,
-      "risky_under_cutoff": 0.2585227272727273
+      "safe_share": 0.37385019710906703,
+      "risky_share": 0.2335742444152431,
+      "safe_under_cutoff": 0.06063268892794376,
+      "risky_under_cutoff": 0.2630098452883263
     },
     "rotation role, middle third": {
       "n": 2397,
-      "safe_share": 0.5903212348769294,
-      "risky_share": 0.13308302044221945,
-      "safe_under_cutoff": 0.024734982332155476,
-      "risky_under_cutoff": 0.5391849529780565
+      "safe_share": 0.58906967042136,
+      "risky_share": 0.13391739674593242,
+      "safe_under_cutoff": 0.024079320113314446,
+      "risky_under_cutoff": 0.5389408099688473
     },
     "rotation role, last third": {
       "n": 2502,
@@ -123,10 +123,10 @@
     },
     "no rotation role": {
       "n": 4433,
-      "safe_share": 0.16241822693435598,
-      "risky_share": 0.5578614933453643,
-      "safe_under_cutoff": 0.020833333333333332,
-      "risky_under_cutoff": 0.6073594824100284
+      "safe_share": 0.16377171215880892,
+      "risky_share": 0.5567335889916535,
+      "safe_under_cutoff": 0.02066115702479339,
+      "risky_under_cutoff": 0.6085899513776337
     }
   }
 }

@@ -37,8 +37,9 @@ METRICS_PATH = config.MODELS_DIR / "in_season_metrics.json"
 SNAPSHOTS_PATH = config.PROCESSED_DIR / "in_season_snapshots.parquet"
 
 SNAPSHOT_DAYS = 14
-# The season model whose out-of-time forecasts are the preseason_share input.
-PRESEASON_MODEL = "LightGBM"
+# The season model whose out-of-time forecasts are the preseason_share input (the same
+# model as train.FINAL_MODEL; chosen on validation folds in next82.improve).
+PRESEASON_MODEL = "LightGBM + linear blend"
 # The first season used for training: earlier seasons have too little history
 # before them to make an out-of-time preseason forecast.
 FIRST_SEASON = "2000-01"
@@ -231,11 +232,17 @@ def season_third(progress) -> np.ndarray:
     return np.minimum((np.asarray(progress, dtype=float) * 3).astype(int), 2)
 
 
+# The range models keep larger leaves whatever the point model's tuning picks: with
+# smaller ones, a correction measured on one season stopped carrying over to the next
+# (on validation: 66.6% of 2023-24 inside the range at 100, 76.4% at 300).
+RANGE_PARAMS = {"min_child_samples": 300}
+
+
 def fit_range(snaps: pd.DataFrame, features: list[str] | None = None, **params) -> tuple:
     """Quantile models for the low and high ends of the rest-of-season share."""
     features = features or IN_SEASON_FEATURES
     return tuple(
-        model(**(params | {"objective": "quantile", "alpha": a})).fit(
+        model(**(params | RANGE_PARAMS | {"objective": "quantile", "alpha": a})).fit(
             snaps[features], snaps.target, sample_weight=snaps.team_games_left
         )
         for a in (intervals.LOW, intervals.HIGH)
@@ -355,10 +362,14 @@ def with_current_injury_features(snap: pd.DataFrame, date: pd.Timestamp) -> pd.D
 def predict_current(models_dir=config.MODELS_DIR) -> pd.DataFrame | None:
     """Today's rest-of-season forecast for every player with a preseason forecast.
 
-    Uses the saved model, the frozen preseason forecasts and this season's game logs.
-    Returns None if the model or the logs aren't available.
+    Uses the saved model, this season's game logs, and preseason inputs: the frozen
+    preseason forecasts' features, with the preseason_share input from the current
+    season model (train.FORECASTS_PATH, made from preseason data only) so it matches
+    what the in-season model was trained on. The frozen forecasts themselves never
+    change. Returns None if the model or the logs aren't available.
     """
     from next82.preseason import load_forecasts
+    from next82.train import FORECASTS_PATH
 
     path = models_dir / MODEL_PATH.name
     logs = data.saved_season_logs()
@@ -368,7 +379,9 @@ def predict_current(models_dir=config.MODELS_DIR) -> pd.DataFrame | None:
     player_games = player_games.assign(GAME_DATE=to_date(player_games.GAME_DATE))
     team_games = team_games.assign(GAME_DATE=to_date(team_games.GAME_DATE))
     forecasts = load_forecasts()
-    players = forecasts.assign(preseason_share=forecasts.pred_share)
+    current = pd.read_parquet(FORECASTS_PATH).set_index("PLAYER_ID").pred_share if FORECASTS_PATH.exists() else None
+    share = forecasts.PLAYER_ID.map(current) if current is not None else forecasts.pred_share
+    players = forecasts.assign(preseason_share=share.fillna(forecasts.pred_share))
 
     teams = data.saved_rosters()
     team_ids = pd.Index(teams.TEAM_ID.unique() if teams is not None else team_games.TEAM_ID.unique())

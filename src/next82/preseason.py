@@ -17,6 +17,9 @@ from next82 import config
 from next82.train import FORECASTS_PATH, RANGES_PATH
 
 PRESEASON_PATH = config.PROCESSED_DIR / f"preseason_{config.FORECAST_SEASON}.parquet"
+# The model that made the frozen forecasts. Its test-season accuracy is what the site
+# quotes for them, even after a newer model takes over the updated forecast.
+FROZEN_MODEL = "LightGBM"
 # Likely ranges for the preseason forecast. Added after the point forecasts were
 # frozen, but computed from preseason data only, and frozen the same way.
 PRESEASON_RANGES_PATH = config.PROCESSED_DIR / f"preseason_ranges_{config.FORECAST_SEASON}.parquet"

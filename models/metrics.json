@@ -7,7 +7,7 @@
     "2023-24",
     "2024-25"
   ],
-  "final_model": "LightGBM",
+  "final_model": "LightGBM + linear blend",
   "results": {
     "Same as last year": {
       "mae_all": 17.741596638655462,
@@ -48,6 +48,16 @@
       "n_all": 952,
       "n_rotation": 606,
       "n_comeback": 31
+    },
+    "LightGBM + linear blend": {
+      "mae_all": 15.441732491437437,
+      "median_error_all": 11.528049669831915,
+      "share_within_16": 0.6313025210084033,
+      "mae_rotation": 14.618368300352465,
+      "mae_comeback": 13.139434130841899,
+      "n_all": 952,
+      "n_rotation": 606,
+      "n_comeback": 31
     }
   },
   "comeback": {
@@ -59,7 +69,7 @@
     "setback_brier_base_rate": 0.21502243459005885,
     "n_healthy": 164,
     "mae_healthy_two_part": 15.093603952584262,
-    "mae_healthy_main_model": 30.83624480665665
+    "mae_healthy_main_model": 29.73759782965031
   },
   "ranges": {
     "all players": {

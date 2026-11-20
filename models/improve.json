@@ -744,5 +744,76 @@
     "change": -0.021755875930030772,
     "folds_better": 2,
     "use_blend": true
+  },
+  "final": {
+    "test_seasons": [
+      "2023-24",
+      "2024-25"
+    ],
+    "season_model": {
+      "LightGBM + linear blend": {
+        "mae_all": 15.441732491437437,
+        "median_error_all": 11.528049669831915,
+        "share_within_16": 0.6313025210084033,
+        "mae_rotation": 14.618368300352465,
+        "mae_comeback": 13.139434130841899,
+        "n_all": 952,
+        "n_rotation": 606,
+        "n_comeback": 31
+      },
+      "LightGBM": {
+        "mae_all": 15.586980241155677,
+        "median_error_all": 11.306618449816346,
+        "share_within_16": 0.6271008403361344,
+        "mae_rotation": 14.698923086112096,
+        "mae_comeback": 13.629714100360584,
+        "n_all": 952,
+        "n_rotation": 606,
+        "n_comeback": 31
+      },
+      "Linear regression": {
+        "mae_all": 15.53542589082283,
+        "median_error_all": 12.944336967574902,
+        "share_within_16": 0.6039915966386554,
+        "mae_rotation": 14.868872770044717,
+        "mae_comeback": 13.206902157989775,
+        "n_all": 952,
+        "n_rotation": 606,
+        "n_comeback": 31
+      },
+      "Same as last year": {
+        "mae_all": 17.741596638655462,
+        "median_error_all": 13.999999999999996,
+        "share_within_16": 0.5703781512605042,
+        "mae_rotation": 16.818481848184817,
+        "mae_comeback": 20.322580645161292,
+        "n_all": 952,
+        "n_rotation": 606,
+        "n_comeback": 31
+      },
+      "3-year average": {
+        "mae_all": 17.156337535014007,
+        "median_error_all": 13.000000000000002,
+        "share_within_16": 0.5640756302521008,
+        "mae_rotation": 16.336908690869087,
+        "mae_comeback": 12.408602150537638,
+        "n_all": 952,
+        "n_rotation": 606,
+        "n_comeback": 31
+      }
+    },
+    "coverage_new": 0.8140756302521008,
+    "coverage_old": 0.8140756302521008,
+    "best_simple": "3-year average",
+    "adopt": true,
+    "in_season": {
+      "test_seasons": [
+        "2024-25",
+        "2025-26"
+      ],
+      "old": 7.541516300878832,
+      "new": 7.536529930945467,
+      "adopt": true
+    }
   }
 }
