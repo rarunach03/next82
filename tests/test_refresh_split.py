@@ -98,3 +98,29 @@ def test_site_data_check_passes_a_good_export_and_catches_a_broken_one(tmp_path,
     found = " | ".join(check.problems())
     for expected in ("only 100 players", "wasn't just generated", "fantasy.json", "no player file"):
         assert expected in found
+
+
+def test_timestamp_only_rebuilds_are_spotted(tmp_path):
+    import importlib.util
+    import subprocess
+    spec = importlib.util.spec_from_file_location("check_site_data", ROOT / "scripts" / "check_site_data.py")
+    check = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(check)
+
+    data_dir = tmp_path / "web" / "public" / "data"
+    data_dir.mkdir(parents=True)
+    git = lambda *a: subprocess.run(["git", *a], cwd=tmp_path, check=True, capture_output=True)
+    git("init", "-q")
+    write = lambda index: (data_dir / "index.json").write_text(json.dumps(index))
+    write({"meta": {"generatedAt": "2026-11-19T03:00:00+00:00", "rostersAsOf": "a"}, "players": []})
+    git("add", ".")
+    git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "x")
+    check.DATA = data_dir
+
+    write({"meta": {"generatedAt": "2026-11-20T03:00:00+00:00", "rostersAsOf": "a"}, "players": []})
+    assert check.only_timestamp_changed(tmp_path)
+    write({"meta": {"generatedAt": "2026-11-20T03:00:00+00:00", "rostersAsOf": "b"}, "players": []})
+    assert not check.only_timestamp_changed(tmp_path)
+    write({"meta": {"generatedAt": "2026-11-20T03:00:00+00:00", "rostersAsOf": "a"}, "players": []})
+    (data_dir / "fantasy.json").write_text("{}")
+    assert not check.only_timestamp_changed(tmp_path)
