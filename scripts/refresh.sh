@@ -1,76 +1,69 @@
 #!/bin/bash
-# Daily refresh. Downloads current rosters, this season's game logs and the draft
-# order (next82.data --current), then rebuilds everything the site shows from them
-# (next82.export): updated forecasts and their ranges, availability tiers, fantasy
-# values including rookies, and the accuracy page. The preseason forecast stays frozen.
-# Commits and pushes only if something changed; Vercel then redeploys the site.
-# Runs on a home computer because stats.nba.com doesn't respond to cloud servers.
+# The Mac's half of the daily refresh. stats.nba.com doesn't answer cloud servers, so
+# this downloads the NBA stats (current rosters, draft order, positions, schedule and this
+# season's game logs: next82.data --current --stats-only), runs the injury-timeline news
+# search when it's due (scripts/news_timelines.sh), and commits and pushes the raw files.
+# That push starts the GitHub Actions workflow (.github/workflows/refresh.yml), which
+# reads the injury report, rebuilds the site data and commits it; Vercel then redeploys.
+# The cloud also runs on its own schedule, so injuries stay current while the Mac is off.
 #
-# Safe to run as often as you like (the launchd job runs it hourly, so it catches up
-# whenever the Mac is awake): it does the work once a day and exits early after that,
-# either because today's refresh commit is already on GitHub, or because it already
-# ran today and found nothing new (recorded in .git/next82-last-refresh).
-# Pass --force to refresh anyway. If data/news_timelines.csv or data/overrides.csv changed
-# since the last refresh (edited by hand and pulled, or by the news step), it re-exports
-# and pushes even on a day it already refreshed.
+# Run by the launchd job com.next82.refresh every hour and at login (a missed hour runs
+# on wake). It does the work once per "NBA day", which starts at 4 am Eastern so the
+# night's late games are final, and exits early after that (recorded in
+# .git/next82-last-refresh). Pass --force to fetch anyway.
 #
-# Every 3 days (sooner for a new serious injury) the news step (scripts/news_timelines.sh)
-# searches for team timelines after the injury report is read. If it fails or times out,
-# the rest of the refresh still runs.
+# The news search runs every 3 days (sooner for a new serious injury); its schedule is
+# kept in data/news_state.json, shared with the cloud. If it fails or times out, the
+# stats still go out.
 #
 # Everything runs inside main(), which bash reads in full before running: `git pull`
 # may replace this file while it runs.
-set -euo pipefail
+set -Eeuo pipefail  # -E: the ERR trap also fires inside main()
 
-COMMIT_MESSAGE="Refresh rosters and games so far"
-TIMELINES_MESSAGE="Update injury timelines"
-TIMELINE_FILES=(data/news_timelines.csv data/news_rejected.csv data/overrides.csv)
+COMMIT_MESSAGE="Refresh NBA stats"
 
-timelines_hash() { cat "${TIMELINE_FILES[@]}" 2>/dev/null | shasum | cut -d' ' -f1; }
-
-commit_and_push() {
-  git add data/raw/current_rosters data/raw/current_season web/public/data "${TIMELINE_FILES[@]}"
-  if git diff --cached --quiet; then
-    echo "No changes"
-  else
-    git commit --quiet -m "$1"
-    git pull --rebase --quiet
-    git push --quiet
-    echo "Pushed: $1"
-  fi
+# A failed run retries next hour; say so on screen too, not just in the log.
+notify_failure() {
+  osascript -e 'display notification "Will retry in an hour. Log: ~/Library/Logs/next82-refresh.log" with title "Next82 refresh failed"' 2>/dev/null || true
 }
 
 main() {
   cd "$(dirname "$0")/.."
-  local today marker last_refresh_commit hash_marker
-  today=${REFRESH_TODAY:-$(date +%Y-%m-%d)}  # override for testing
+  # The stats files and the news step's files; the injury report files belong to the cloud.
+  local files=(data/raw/current_rosters
+               data/raw/current_season/{draft,player_games,players,positions,schedule,team_games,teams}_*.parquet
+               data/news_timelines.csv data/news_rejected.csv data/overrides.csv data/news_state.json)
+  local nba_day marker
+  # The NBA day: before 4 am Eastern still counts as the day before.
+  nba_day=${REFRESH_TODAY:-$(TZ=America/New_York date -v-4H +%Y-%m-%d)}  # override for testing
   marker=.git/next82-last-refresh
-  hash_marker=.git/next82-timelines-hash
   echo "== $(date) =="
+  if [[ "${1:-}" != "--force" && -f "$marker" && "$(cat "$marker")" == "$nba_day" ]]; then
+    echo "Already fetched for $nba_day; nothing to do"
+    return
+  fi
   git pull --rebase --quiet
 
-  if [[ "${1:-}" != "--force" ]]; then
-    last_refresh_commit=$(git log -1 --format=%cd --date=format:%Y-%m-%d --grep="^${COMMIT_MESSAGE}\$" || true)
-    if [[ "$last_refresh_commit" == "$today" || ( -f "$marker" && "$(cat "$marker")" == "$today" ) ]]; then
-      if [[ -f "$hash_marker" && "$(cat "$hash_marker")" != "$(timelines_hash)" ]]; then
-        echo "Timelines or overrides changed since the last refresh; re-exporting"
-        ./.venv/bin/python -m next82.export
-        commit_and_push "$TIMELINES_MESSAGE"
-        timelines_hash > "$hash_marker"
-      else
-        echo "Already refreshed today; nothing to do"
-      fi
-      return
-    fi
-  fi
-
-  ./.venv/bin/python -m next82.data --current
+  ./.venv/bin/python -m next82.data --current --stats-only
   ./scripts/news_timelines.sh || echo "News step failed; continuing the refresh"
-  ./.venv/bin/python -m next82.export
-  commit_and_push "$COMMIT_MESSAGE"
-  timelines_hash > "$hash_marker"
-  echo "$today" > "$marker"
+
+  git add -- "${files[@]}"
+  if git diff --cached --quiet; then
+    echo "No changes"
+  else
+    git commit --quiet -m "$COMMIT_MESSAGE"
+    # The cloud may have pushed meanwhile. It writes the site data and injury files, not
+    # these (except the news files, if the news search also runs there), so this rebases cleanly.
+    for attempt in 1 2 3; do
+      git pull --rebase --quiet && git push --quiet && break
+      [[ $attempt == 3 ]] && { echo "Push failed"; exit 1; }
+      sleep 30
+    done
+    echo "Pushed: $COMMIT_MESSAGE"
+  fi
+  echo "$nba_day" > "$marker"
 }
 
+trap notify_failure ERR
 main "$@"
 exit

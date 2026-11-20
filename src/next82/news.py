@@ -10,7 +10,8 @@ asked about, valid dates after the injury, a source URL that resolves. Valid row
 into data/news_timelines.csv; rejected ones are logged. refresh.sh commits.
 
 The state (last run date, which players were listed and how) is kept in
-.git/next82-news-state.json, so it never reaches GitHub.
+data/news_state.json and committed, so the "every 3 days" schedule holds wherever the
+search runs: on the Mac, or in GitHub Actions when CLAUDE_CODE_OAUTH_TOKEN is set.
 
 Usage:
     python -m next82.news            # run if it's due
@@ -31,7 +32,7 @@ import requests
 
 from next82 import auto_overrides, config, data, injuries, overrides
 
-STATE_PATH = config.ROOT / ".git" / "next82-news-state.json"
+STATE_PATH = config.ROOT / "data" / "news_state.json"
 NEWS_EVERY_DAYS = 3
 RECENT_ROW_DAYS = 7            # skip players with a news row this recent, unless their status changed
 TIMEOUT_SECONDS = 25 * 60

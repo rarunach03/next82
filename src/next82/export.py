@@ -11,7 +11,7 @@ import json
 import math
 import shutil
 import unicodedata
-from datetime import datetime
+from datetime import datetime, timezone
 
 import numpy as np
 import pandas as pd
@@ -596,7 +596,7 @@ def main():
             "regularSeasonEnd": regular_season_end(),
             # Game-by-game availability (beta): games.json is there and the site shows it.
             "gameBeta": game_beta,
-            "generatedAt": datetime.now().isoformat(timespec="seconds"),
+            "generatedAt": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "games": GAMES,
             "setbackGames": config.SETBACK_GAMES,
             "tierSafeLow": config.TIER_SAFE_LOW,

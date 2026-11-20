@@ -1,0 +1,122 @@
+name: refresh site data
+
+# The cloud half of the daily refresh. stats.nba.com doesn't answer GitHub's servers, so
+# the Mac downloads the NBA stats and pushes them (scripts/refresh.sh); this reads the
+# NBA's injury report, runs the injury-timeline news search when it's due (only if the
+# CLAUDE_CODE_OAUTH_TOKEN secret is set; otherwise the Mac runs it), rebuilds the site
+# data from the committed files, checks it, and commits it. Vercel redeploys on that push.
+#
+# Runs when the Mac pushes stats or someone pushes news timelines or manual overrides,
+# twice a day on a schedule (so injuries stay current even when the Mac is off), and by
+# hand from the Actions tab. If any step fails the run fails (GitHub emails the owner)
+# and nothing is committed: the site keeps the last good data.
+on:
+  schedule:
+    - cron: "20 10 * * *"   # 5:20 am Eastern (6:20 in summer): after the night's games
+    - cron: "40 21 * * *"   # 4:40 pm Eastern: the game-day injury report
+  push:
+    branches: [main]
+    paths:
+      - data/raw/current_rosters/**
+      - data/raw/current_season/**
+      - data/news_timelines.csv
+      - data/news_rejected.csv
+      - data/overrides.csv
+  workflow_dispatch:
+    inputs:
+      news:
+        description: "News search: run if due, force it, or skip it"
+        type: choice
+        options: [if-due, force, skip]
+        default: if-due
+
+permissions:
+  contents: write   # commit the refreshed data
+  actions: write    # keepalive: re-enable this workflow so the schedule never lapses
+
+# One refresh at a time; a run started meanwhile waits rather than racing to push.
+concurrency:
+  group: refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      # The whole virtualenv is cached, keyed on the requirements, so most runs skip installing.
+      - uses: actions/cache@v4
+        with:
+          path: .venv
+          key: venv-${{ runner.os }}-py${{ steps.python.outputs.python-version }}-${{ hashFiles('requirements.txt', 'pyproject.toml') }}
+
+      - name: Install Python packages
+        run: |
+          [ -x .venv/bin/python ] || python -m venv .venv
+          .venv/bin/pip install --quiet -r requirements.txt
+          .venv/bin/pip install --quiet --no-deps -e .
+
+      - name: Read the injury report
+        run: .venv/bin/python -m next82.data --current --injuries-only
+
+      - name: Search the news for injury timelines
+        id: news
+        if: inputs.news != 'skip'
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          FORCE: ${{ inputs.news == 'force' && '--force' || '' }}
+        run: |
+          if [ -z "$CLAUDE_CODE_OAUTH_TOKEN" ]; then
+            echo "No CLAUDE_CODE_OAUTH_TOKEN secret: the Mac runs the news search"
+            exit 0
+          fi
+          npm install --global --silent @anthropic-ai/claude-code
+          # Like the Mac: a failed or timed-out search doesn't stop the refresh, but it's flagged.
+          ./scripts/news_timelines.sh $FORCE || echo "::warning::News search failed; the refresh continued without it"
+
+      - name: Rebuild the site data
+        run: .venv/bin/python -m next82.export
+
+      - name: Check the rebuilt data
+        run: |
+          .venv/bin/python scripts/check_site_data.py
+          .venv/bin/pytest -q
+
+      - name: Commit and push if anything changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add web/public/data data/raw/current_season/injuries_*.parquet data/raw/current_season/injury_log_*.parquet \
+            data/news_timelines.csv data/news_rejected.csv data/news_state.json
+          if git diff --cached --quiet; then
+            echo "No changes"
+            exit 0
+          fi
+          git commit --quiet -m "Refresh site data"
+          # The Mac may have pushed meanwhile; it doesn't touch these files, so this rebases
+          # cleanly. That push starts another run, which rebuilds with its stats.
+          for attempt in 1 2 3; do
+            if git pull --rebase --quiet && git push --quiet; then
+              echo "Pushed $(git rev-parse --short HEAD)"
+              exit 0
+            fi
+            git rebase --abort 2>/dev/null || true
+            sleep 20
+          done
+          echo "::error::Couldn't push the refreshed data"
+          exit 1
+
+      # Scheduled workflows stop after 60 days without repository activity (the off-season).
+      # Re-enabling the workflow resets that clock, so the schedule never silently lapses.
+      - name: Keepalive
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api --method PUT "repos/${{ github.repository }}/actions/workflows/refresh.yml/enable"

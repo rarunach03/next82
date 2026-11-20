@@ -5,8 +5,6 @@ name: cloud probe workarounds
 # sources for the same data respond.
 on:
   workflow_dispatch:
-  push:
-    branches: [cloud-probe]
 
 permissions:
   contents: read

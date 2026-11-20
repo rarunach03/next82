@@ -6,8 +6,6 @@ name: cloud probe
 # Claude Code web search, the tool the news step uses.
 on:
   workflow_dispatch:
-  push:
-    branches: [cloud-probe]
 
 permissions:
   contents: read

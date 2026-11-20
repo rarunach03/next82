@@ -10,6 +10,12 @@ Usage:
     python -m next82.data --seasons 2024-25  # specific seasons
     python -m next82.data --force            # re-download existing files
     python -m next82.data --current          # refresh current rosters and games so far only
+    python -m next82.data --current --stats-only     # ... without the injury report (the Mac's part)
+    python -m next82.data --current --injuries-only  # only the injury report (the cloud's part)
+
+The daily refresh is split in two because stats.nba.com doesn't answer cloud servers:
+the Mac downloads the stats (scripts/refresh.sh), GitHub Actions reads the injury report
+and rebuilds the site (.github/workflows/refresh.yml).
 """
 import argparse
 import threading
@@ -340,10 +346,14 @@ def main():
     parser.add_argument("--force", action="store_true")
     parser.add_argument("--current", "--rosters", action="store_true",
                         help="only refresh current rosters and games played so far")
+    only = parser.add_mutually_exclusive_group()
+    only.add_argument("--stats-only", action="store_true", help="with --current: skip the injury report")
+    only.add_argument("--injuries-only", action="store_true",
+                      help="with --current: only the injury report (uses the saved rosters)")
     args = parser.parse_args()
 
     if args.current:
-        refresh_current()
+        refresh_current(stats=not args.injuries_only, injury_report=not args.stats_only)
         return
 
     for season in args.seasons:
@@ -354,29 +364,50 @@ def main():
     refresh_current()
 
 
-def refresh_current(season: str = config.FORECAST_SEASON):
-    """Refresh current rosters and games played so far in the season being forecast."""
-    rosters = fetch_current_rosters(season)
-    print(f"Current rosters ({season}): {len(rosters)} players on {rosters.TEAM_ID.nunique()} teams")
-    time.sleep(config.REQUEST_DELAY)
-    draft = fetch_draft(season)
-    print(f"Draft {season[:4]}: {len(draft)} picks")
-    time.sleep(config.REQUEST_DELAY)
-    positions = fetch_positions(season)
-    print(f"Positions: {positions.POSITION.notna().sum()} players")
-    time.sleep(config.REQUEST_DELAY)
-    schedule = fetch_schedule(season)
-    print(f"Schedule: {schedule.GAME_ID.nunique()} games with both teams set")
-    time.sleep(config.REQUEST_DELAY)
-    from next82 import injuries  # the NBA's official injury report (parsed facts only)
+def _retry(call, what: str, tries: int = MAX_RETRIES):
+    """Run one API call, retrying with growing waits: stats.nba.com drops requests now and then."""
+    for attempt in range(1, tries + 1):
+        try:
+            return call()
+        except Exception as e:
+            if attempt == tries:
+                raise
+            wait = 10 * attempt
+            print(f"  {what}: {type(e).__name__}, retrying in {wait}s")
+            time.sleep(wait)
 
-    injuries.refresh(rosters, season)
-    time.sleep(config.REQUEST_DELAY)
-    players, teams_so_far = fetch_season_to_date(season)
-    if teams_so_far.empty:
-        print(f"{season} hasn't started yet")
+
+def refresh_current(season: str = config.FORECAST_SEASON, stats: bool = True, injury_report: bool = True):
+    """Refresh current rosters and games played so far in the season being forecast, and
+    the injury report. `stats` is the stats.nba.com part, `injury_report` the PDF part."""
+    if stats:
+        rosters = _retry(lambda: fetch_current_rosters(season), "rosters")
+        print(f"Current rosters ({season}): {len(rosters)} players on {rosters.TEAM_ID.nunique()} teams")
+        time.sleep(config.REQUEST_DELAY)
+        draft = _retry(lambda: fetch_draft(season), "draft")
+        print(f"Draft {season[:4]}: {len(draft)} picks")
+        time.sleep(config.REQUEST_DELAY)
+        positions = _retry(lambda: fetch_positions(season), "positions")
+        print(f"Positions: {positions.POSITION.notna().sum()} players")
+        time.sleep(config.REQUEST_DELAY)
+        schedule = _retry(lambda: fetch_schedule(season), "schedule")
+        print(f"Schedule: {schedule.GAME_ID.nunique()} games with both teams set")
+        time.sleep(config.REQUEST_DELAY)
     else:
-        print(f"{season} so far: {len(players)} players have played, through {teams_so_far.LAST_GAME.iloc[0]}")
+        rosters = saved_rosters(season)
+        if rosters is None:
+            raise SystemExit("No saved rosters: run with --stats-only first")
+    if injury_report:
+        from next82 import injuries  # the NBA's official injury report (parsed facts only)
+
+        injuries.refresh(rosters, season)
+    if stats:
+        time.sleep(config.REQUEST_DELAY)
+        players, teams_so_far = _retry(lambda: fetch_season_to_date(season), "games so far")
+        if teams_so_far.empty:
+            print(f"{season} hasn't started yet")
+        else:
+            print(f"{season} so far: {len(players)} players have played, through {teams_so_far.LAST_GAME.iloc[0]}")
 
 
 if __name__ == "__main__":

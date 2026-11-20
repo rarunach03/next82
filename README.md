@@ -127,26 +127,46 @@ until the pipeline is rerun, the site says newer data is available. Set
 
 ## Daily updates
 
-`scripts/refresh.sh` downloads current rosters, this season's game logs, the schedule, the draft
-order and the latest official injury report,
-runs `python -m next82.export` (updated forecasts, automatic injury adjustments, ranges, tiers,
-fantasy values including rookies, back-to-backs, the stash list and accuracy), and commits and pushes if anything changed. Each push redeploys the site
-on Vercel (https://next82.vercel.app, built from `web/`); the old GitHub Pages address only
-redirects there (`.github/workflows/deploy-pages.yml`, `pages-redirect/`). After the injury report is read, it
-runs the news step (`scripts/news_timelines.sh`, below); if that fails or times out, the refresh
-carries on. If `data/news_timelines.csv` or `data/overrides.csv` changed since the last refresh, it
-re-exports and pushes even on a day it already ran.
+The refresh is split in two, because stats.nba.com doesn't answer cloud servers (tested from
+GitHub's Linux, macOS and Windows runners, with browser headers, long timeouts, retries, IPv6 and
+HTTP/2: `.github/workflows/cloud-probe*.yml` re-tests). Everything else runs in the cloud.
 
-The refresh runs on a home computer, not in the cloud: stats.nba.com doesn't respond to cloud
-servers. On the project's Mac a launchd job runs it hourly from a separate copy of the repo (macOS
-doesn't let background jobs into the Desktop folder): the full refresh happens once a day, and on
-later runs that day it only re-exports and pushes if `data/news_timelines.csv` or
-`data/overrides.csv` changed.
-Run it by hand any time:
+**The Mac: the NBA stats.** `scripts/refresh.sh` downloads current rosters, the draft order,
+positions, the schedule and this season's game logs (`python -m next82.data --current --stats-only`,
+each call retried with backoff), runs the news step when it's due (`scripts/news_timelines.sh`,
+below; if it fails the stats still go out), and commits and pushes those raw files. A launchd job
+(`com.next82.refresh`) runs it every hour and at login from a separate copy of the repo (macOS
+doesn't let background jobs into the Desktop folder); launchd runs a missed hour on wake. It does
+the work once per "NBA day", which starts at 4 am Eastern so the night's late games are final, and
+shows a macOS notification if a run fails (it retries the next hour).
+
+**GitHub Actions: everything else.** `.github/workflows/refresh.yml` reads the latest official
+injury report, runs the news step if the `CLAUDE_CODE_OAUTH_TOKEN` secret is set, runs
+`python -m next82.export` (updated forecasts, automatic injury adjustments, ranges, tiers, fantasy
+values including rookies, back-to-backs, the stash list, the game-by-game beta and accuracy),
+checks the result (`scripts/check_site_data.py` and the full pytest suite), and commits the site
+data only if something changed. It runs when the Mac pushes stats, when someone pushes
+`data/news_timelines.csv` or `data/overrides.csv`, at 5:20 am and 4:40 pm Eastern (so injuries stay
+current while the Mac is off), and by hand from the Actions tab. If any step fails, the run fails
+(GitHub emails the owner) and nothing is committed: the site keeps the last good data. Each run
+re-enables the workflow, so GitHub's 60-day inactivity rule can't switch the schedule off in the
+off-season.
+
+Each push redeploys the site on Vercel (https://next82.vercel.app, built from `web/`); the old
+GitHub Pages address only redirects there (`.github/workflows/deploy-pages.yml`, `pages-redirect/`).
+If the stats or the site data are more than two days old, the site says so next to the "games
+thru" date (`web/src/freshness.ts`).
+
+Run either half by hand:
 
 ```bash
-./scripts/refresh.sh
+./scripts/refresh.sh --force           # on the Mac
+gh workflow run refresh.yml            # in the cloud (add -f news=force to force the news search)
 ```
+
+To move the news search to the cloud too, run `claude setup-token` and store the token with
+`gh secret set CLAUDE_CODE_OAUTH_TOKEN`. The schedule is shared (`data/news_state.json`), so it
+won't run twice.
 
 ## Injury adjustments
 
@@ -284,7 +304,8 @@ src/next82/
 web/               React site (Vite, TypeScript, Tailwind, Recharts); data in public/data/
   src/roster/      My roster logic: simulation, risk flags (rules in flags.ts), swaps, trades
   src/nav.ts       header menus; redirects.ts sends old addresses on; playerViews.ts the All players views
-scripts/           refresh.sh (daily update), news_timelines.sh (news search)
+scripts/           refresh.sh (the Mac's daily stats download), news_timelines.sh (news search),
+                   check_site_data.py (checks an export), cloud_probe.py (which sources the cloud reaches)
 data/, models/     committed: frozen forecasts, current-season data, LightGBM models (text format)
 app/               the original Streamlit app (internal)
 tests/             pytest; tests needing the full downloaded data skip themselves
@@ -303,7 +324,8 @@ tests/             pytest; tests needing the full downloaded data skip themselve
 - The preseason edge over simple guessing is real but modest (15.4 vs 17.2 games).
 - Comeback forecasts can't see injury type or medical clearance.
 - The news search only finds what's published and stated clearly; vague reports ("no timeline",
-  "day to day") add nothing, and it runs on the Mac, so it pauses when the Mac is off.
+  "day to day") add nothing, and unless the cloud has a Claude token it runs on the Mac, so it
+  pauses when the Mac is off.
 
 ## Next up
 
@@ -315,5 +337,6 @@ tests/             pytest; tests needing the full downloaded data skip themselve
   of unknown type, so more injuries get automatic estimates.
 - **Checking news rows against the injury report**: a news row stays until it's replaced; it could
   also expire when the player is back in the lineup.
-- **Moving the refresh off the Mac** if stats.nba.com ever answers cloud servers.
+- **Moving the stats download off the Mac** if stats.nba.com ever answers cloud servers (the rest
+  of the refresh already runs in GitHub Actions).
 - **Grading the updated forecast** at the end of the season, alongside the preseason one.
