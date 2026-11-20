@@ -258,9 +258,57 @@ def saved_log(season: str = config.FORECAST_SEASON) -> pd.DataFrame | None:
     return pd.read_parquet(path) if path.exists() else None
 
 
+MAX_GAP_DAYS = 30   # how far back a missed day is filled in
+
+
+def last_report_of(day, tries: int = 8, delay: float = 0.2) -> tuple[str, datetime, bytes] | None:
+    """A past day's final report (11:45 pm, stepping back 15 minutes at a time)."""
+    when = datetime(day.year, day.month, day.day, 23, 45)
+    for _ in range(tries):
+        pdf = get(report_url(when))
+        if pdf is not None:
+            return report_url(when), when, pdf
+        when -= timedelta(minutes=15)
+        time.sleep(delay)
+    return None
+
+
+def missing_days(history: pd.DataFrame | None, today) -> list[pd.Timestamp]:
+    """Days between the log's first day and today with no report in the log (at most
+    MAX_GAP_DAYS back), e.g. while the refresh was down."""
+    if history is None or history.empty:
+        return []
+    have = set(pd.to_datetime(history.report_day).dt.normalize())
+    start = max(min(have), pd.Timestamp(today).normalize() - pd.Timedelta(days=MAX_GAP_DAYS))
+    return [d for d in pd.date_range(start, pd.Timestamp(today).normalize() - pd.Timedelta(days=1)) if d not in have]
+
+
+def fill_gaps(rosters: pd.DataFrame, season: str = config.FORECAST_SEASON, today=None) -> list[pd.Timestamp]:
+    """Add each missed day's final report to the log, so features that look back a few
+    days or a week aren't left empty after an outage. Returns the days filled."""
+    today = pd.Timestamp(today or datetime.now(EASTERN).replace(tzinfo=None)).normalize()
+    history = saved_log(season)
+    filled = []
+    for day in missing_days(history, today):
+        found = last_report_of(day)
+        if found is None:
+            continue
+        url, when, pdf = found
+        facts, _ = parsed_report(pdf, url, when, rosters)
+        history = pd.concat([history, facts.assign(report_day=facts.report_time.dt.normalize())])
+        filled.append(day)
+    if filled:
+        history = history.sort_values("report_day", kind="stable").reset_index(drop=True)
+        history.to_parquet(paths(season)[1], index=False)
+        print(f"Injury report: filled {len(filled)} missed days ({filled[0]:%b %d} to {filled[-1]:%b %d})")
+    return filled
+
+
 def refresh(rosters: pd.DataFrame, season: str = config.FORECAST_SEASON) -> pd.DataFrame | None:
     """Fetch the latest report, save its parsed facts, and add them to the season's log
-    (one row per player per report day). Returns the facts, or None if none was found."""
+    (one row per player per report day), filling in any days missed since the log began.
+    Returns the facts, or None if none was found."""
+    fill_gaps(rosters, season)
     latest = fetch_latest()
     if latest is None:
         print("Injury report: no report found in the last two hours")

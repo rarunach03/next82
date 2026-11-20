@@ -75,3 +75,36 @@ def test_reason_joins_and_cleanup():
     assert injuries._join_reason(["Injury/Illness - Right ACL Repair /", "Surgery"]) == "Injury/Illness - Right ACL Repair / Surgery"
     assert injuries.clean_reason("Injury/Illness - Right ACL Repair /; Surgery") == "Injury/Illness - Right ACL Repair / Surgery"
     assert injuries.clean_reason(None) is None
+
+
+def test_missing_days_are_the_gaps_since_the_log_began():
+    log = pd.DataFrame({"report_day": pd.to_datetime(["2026-10-26", "2026-10-27", "2026-10-31"])})
+    missing = injuries.missing_days(log, pd.Timestamp("2026-11-02 05:00"))
+    assert [f"{d:%m-%d}" for d in missing] == ["10-28", "10-29", "10-30", "11-01"]   # today isn't over yet
+    assert injuries.missing_days(None, pd.Timestamp("2026-11-02")) == []
+    # Never more than MAX_GAP_DAYS back.
+    old = pd.DataFrame({"report_day": pd.to_datetime(["2025-01-01"])})
+    assert len(injuries.missing_days(old, pd.Timestamp("2026-11-02"))) == injuries.MAX_GAP_DAYS
+
+
+def test_fill_gaps_adds_each_missed_days_final_report(tmp_path, monkeypatch):
+    log_path = tmp_path / "log.parquet"
+    rows = lambda day, hour: pd.DataFrame({
+        "team": ["Boston Celtics"], "player_name": ["Tatum, Jayson"], "status": ["Out"], "reason": ["x"],
+        "PLAYER_ID": [1628369.0], "report_time": [pd.Timestamp(f"{day} {hour}")],
+        "report_url": ["u"], "report_day": [pd.Timestamp(day)]})
+    pd.concat([rows("2026-10-26", "17:00"), rows("2026-10-29", "00:45")]).to_parquet(log_path, index=False)
+    monkeypatch.setattr(injuries, "paths", lambda season=None: (tmp_path / "now.parquet", log_path))
+    asked = []
+
+    def last_report_of(day):
+        asked.append(day)
+        return (None if day == pd.Timestamp("2026-10-28") else ("url", datetime(day.year, day.month, day.day, 23, 45), b"%PDF"))
+    monkeypatch.setattr(injuries, "last_report_of", last_report_of)
+    monkeypatch.setattr(injuries, "parsed_report", lambda pdf, url, when, rosters: (rows(f"{when:%Y-%m-%d}", "23:45"), []))
+
+    filled = injuries.fill_gaps(pd.DataFrame(), today="2026-10-30")
+    assert [f"{d:%m-%d}" for d in asked] == ["10-27", "10-28"]
+    assert [f"{d:%m-%d}" for d in filled] == ["10-27"]          # no report found for the 28th: left out
+    saved = pd.read_parquet(log_path)
+    assert [f"{d:%m-%d}" for d in saved.report_day] == ["10-26", "10-27", "10-29"]
