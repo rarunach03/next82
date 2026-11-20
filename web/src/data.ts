@@ -53,14 +53,20 @@ export function useAccuracy(): SeasonAccuracy | null | undefined {
 }
 
 /** Fantasy values, fetched once. `undefined` while loading, `null` if not exported. */
-export function useFantasy(): Fantasy | null | undefined {
+/** Fantasy values, fetched once and shared. Pass `enabled = false` to skip the download until it's needed. */
+export function useFantasy(enabled = true): Fantasy | null | undefined {
   const [fantasy, setFantasy] = useState<Fantasy | null | undefined>(undefined)
   useEffect(() => {
+    if (!enabled) return
+    let current = true
     fantasyPromise ??= fetch(`${BASE}data/fantasy.json`)
       .then((r) => (r.ok ? r.json() : null))
       .catch(() => null)
-    fantasyPromise.then(setFantasy)
-  }, [])
+    fantasyPromise.then((f) => current && setFantasy(f))
+    return () => {
+      current = false
+    }
+  }, [enabled])
   return fantasy
 }
 

@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import InjuredTable from '../components/InjuredTable'
 import Leaderboard from '../components/Leaderboard'
@@ -17,7 +17,8 @@ export default function Home({ index }: { index: Index }) {
   const teamAbbr = params.get('team')?.toUpperCase() ?? ''
   const team = teams.find((t) => t.abbr === teamAbbr)
   const format = parseFormat(params.get('format'))
-  const fantasy = useFantasy()
+  // Only the stash view needs fantasy values, so don't download them otherwise.
+  const fantasy = useFantasy(view === 'stash')
 
   const rows = useMemo(() => allPlayers(players, team?.abbr ?? '', meta.seasonStarted), [players, team, meta.seasonStarted])
   const injured = useMemo(() => injuredPlayers(players, team?.abbr ?? ''), [players, team])
@@ -39,6 +40,19 @@ export default function Home({ index }: { index: Index }) {
       { replace: true },
     )
   }
+  // Drop a team the URL names but we don't know (e.g. ?team=XYZ) instead of quietly showing everyone.
+  useEffect(() => {
+    if (teamAbbr && !team) set('team', '')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [teamAbbr, team])
+
+  // The injured view's link keeps the current team and scoring, like a normal click does.
+  const injuredLink = useMemo(() => {
+    const next = new URLSearchParams(params)
+    next.set('view', 'injured')
+    return `/?${next}`
+  }, [params])
+
   function showView(v: PlayerView) {
     set('view', v, 'all')
     document.getElementById('players')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -59,14 +73,15 @@ export default function Home({ index }: { index: Index }) {
           will they play?
         </h1>
         <p className="mt-4 max-w-xl text-muted">
-          Every NBA player's expected games this season, updated daily with games played and injury news.
+          Expected games this season for every returning NBA player, updated daily with games played and injury news.
         </p>
         <Link
           to="/how-it-works#accuracy"
           className="group mt-4 inline-flex flex-wrap items-baseline gap-x-1.5 rounded-xl border border-line bg-surface px-3 py-2 text-sm transition hover:border-accent/60"
         >
-          <span className="text-muted">On past seasons, misses by</span>
-          <span className="tabular font-semibold text-accent">{meta.accuracy.modelMae} games</span>
+          <span className="text-muted">Tested on past seasons, our preseason forecasts miss by</span>
+          {/* The frozen preseason forecasts came from the earlier model, so quote its error, not the current one's. */}
+          <span className="tabular font-semibold text-accent">{meta.accuracy.frozenModelMae ?? meta.accuracy.modelMae} games</span>
           <span className="text-muted">on average vs. {meta.accuracy.bestBaselineMae} for the best simple guess</span>
           <span className="text-accent transition group-hover:translate-x-0.5">→</span>
         </Link>
@@ -79,7 +94,7 @@ export default function Home({ index }: { index: Index }) {
           </div>
           <Choice to="/rankings" title="Fantasy rankings" text="Who's worth the most from here on, counting games they'll miss." />
           <Choice
-            to="/?view=injured"
+            to={injuredLink}
             onClick={() => showView('injured')}
             title="Who's injured"
             text={`${injuredCount} players out with an injury, and when they're expected back.`}
@@ -90,12 +105,12 @@ export default function Home({ index }: { index: Index }) {
       <section id="players" className="scroll-mt-20 pb-16">
         <h2 className="font-display text-3xl font-bold uppercase">{team ? team.name : 'All players'}</h2>
         <div className="mt-3 mb-4 flex flex-wrap items-end gap-3">
-          <div role="tablist" aria-label="Show" className="inline-flex rounded-lg border border-line bg-surface p-0.5">
+          <div role="group" aria-label="Show" className="inline-flex rounded-lg border border-line bg-surface p-0.5">
             {VIEWS.map((v) => (
               <button
                 key={v.id}
-                role="tab"
-                aria-selected={view === v.id}
+                type="button"
+                aria-pressed={view === v.id}
                 onClick={() => set('view', v.id, 'all')}
                 className={`rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap transition ${
                   view === v.id ? 'bg-accent text-bg' : 'text-muted hover:text-ink'
@@ -143,7 +158,6 @@ export default function Home({ index }: { index: Index }) {
           ) : (
             <StashTable rows={stash} />
           ))}
-
       </section>
     </>
   )
