@@ -30,9 +30,13 @@ notify_failure() {
 main() {
   cd "$(dirname "$0")/.."
   # The stats files and the news step's files; the injury report files belong to the cloud.
-  local files=(data/raw/current_rosters
-               data/raw/current_season/{draft,player_games,players,positions,schedule,team_games,teams}_*.parquet
-               data/news_timelines.csv data/news_rejected.csv data/overrides.csv data/news_state.json)
+  # Declared, then assigned: macOS's bash 3.2 turns `local files=(...)` into a single string.
+  local -a files
+  files=(data/raw/current_rosters data/raw/current_season/draft_*.parquet
+         data/raw/current_season/player_games_*.parquet data/raw/current_season/players_*.parquet
+         data/raw/current_season/positions_*.parquet data/raw/current_season/schedule_*.parquet
+         data/raw/current_season/team_games_*.parquet data/raw/current_season/teams_*.parquet
+         data/news_timelines.csv data/news_rejected.csv data/overrides.csv data/news_state.json)
   local nba_day marker
   # The NBA day: before 4 am Eastern still counts as the day before.
   nba_day=${REFRESH_TODAY:-$(TZ=America/New_York date -v-4H +%Y-%m-%d)}  # override for testing

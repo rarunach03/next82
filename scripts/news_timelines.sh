@@ -12,7 +12,15 @@ set -uo pipefail
 cd "$(dirname "$0")/.."
 "${PYTHON:-./.venv/bin/python}" -m next82.news "$@" &
 pid=$!
-( sleep 1800; kill "$pid" 2>/dev/null && echo "News search: killed after 30 minutes" ) &
+# The watchdog's sleep is killed with it, so nothing is left holding the output open
+# (a leftover sleep made anything reading this script's output wait 30 minutes).
+(
+  trap 'kill "$nap" 2>/dev/null; exit 0' TERM
+  sleep 1800 >/dev/null 2>&1 &
+  nap=$!
+  wait "$nap"
+  kill "$pid" 2>/dev/null && echo "News search: killed after 30 minutes"
+) &
 watchdog=$!
 wait "$pid"
 status=$?
