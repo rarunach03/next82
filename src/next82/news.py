@@ -265,7 +265,9 @@ def _date(value):
 
 def changed_rows(original: pd.DataFrame, edited: pd.DataFrame) -> pd.DataFrame:
     """Rows in the edited file that aren't exactly in the original (as text)."""
-    as_text = lambda df: df.astype(str).replace({"nan": "", "NaT": "", "<NA>": ""})
+    # Missing values become "" whether they're NaN, NaT or pd.NA (pandas 3's astype(str)
+    # keeps them missing, so they'd never equal the "" read back from the file).
+    as_text = lambda df: df.astype(str).fillna("").replace({"nan": "", "NaT": "", "<NA>": "", "None": ""})
     before = {tuple(r) for r in as_text(original.reindex(columns=auto_overrides.NEWS_COLUMNS))
               .itertuples(index=False)}
     rows = as_text(edited)
@@ -357,13 +359,12 @@ def main(argv=None):
         if edited is None:
             print("News search failed: no edited file")
             raise SystemExit(1)
-        changed = changed_rows(news, edited)
-        if changed.empty and never_searched(reply):
+        if never_searched(reply):
             # Claude Code didn't run (bad token, API error, crash): don't record a search
             # that never happened, so the next refresh (here or on the Mac) tries again.
             print("News search failed before searching; not recorded as a run, so it retries next refresh")
             raise SystemExit(1)
-        valid, problems = validate(changed, todo, today)
+        valid, problems = validate(changed_rows(news, edited), todo, today)
         for line in problems:
             print(f"News search: {line}")
         merged, lines = merge(news, valid)

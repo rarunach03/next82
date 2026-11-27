@@ -137,8 +137,9 @@ def test_a_search_that_never_ran_is_not_recorded(tmp_path, monkeypatch):
     monkeypatch.setattr(news, "serious_out", lambda p: set())
     monkeypatch.setattr(news, "select", lambda p, n, s, t: players)
     original = news.auto_overrides.load_news()
+    edited = original.astype(str).assign(note="reformatted")   # differs, but Claude never ran
     monkeypatch.setattr(news, "run_claude", lambda *a: (
-        original, "stopped early (success): Failed to authenticate. API Error: 401 OAuth access token is invalid."))
+        edited, "stopped early (success): Failed to authenticate. API Error: 401 OAuth access token is invalid."))
     with pytest.raises(SystemExit):
         news.main(["--force"])
     assert not state.exists()
@@ -154,3 +155,15 @@ def test_never_searched():
     assert news.never_searched("claude exited with 1: boom")
     assert not news.never_searched("stopped early (error_max_budget_usd): added 3 rows")
     assert not news.never_searched("Added 2 rows")
+
+
+def test_an_untouched_file_has_no_changed_rows(tmp_path):
+    """Round trip through the sandbox copy, as when Claude Code edits nothing."""
+    import io
+    original = news.auto_overrides.load_news()
+    assert original.latest_return.isna().any()      # blank dates are the case that broke
+    buf = io.StringIO()
+    original.to_csv(buf, index=False, date_format="%Y-%m-%d")
+    buf.seek(0)
+    edited = pd.read_csv(buf, dtype=str, keep_default_na=False)
+    assert news.changed_rows(original, edited).empty
