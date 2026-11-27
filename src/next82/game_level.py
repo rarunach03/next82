@@ -516,6 +516,23 @@ def load_model() -> tuple[lgb.Booster, dict, dict]:
     return lgb.Booster(model_file=str(MODEL_PATH)), metrics["calibration_points"], metrics
 
 
+def live_schedule(finished: pd.DataFrame, schedule: pd.DataFrame, data_day: pd.Timestamp,
+                  today: pd.Timestamp) -> tuple[pd.DataFrame, pd.Timestamp]:
+    """The schedule the live predictions use, and the first day they predict.
+
+    History is the finished games only. A scheduled game before that day which isn't
+    final (in progress when the stats were fetched, or postponed) is left out: counted
+    as history, every player on the team would look like he missed it. Upcoming games
+    start the day after the latest finished game, or today if the stats are older, so a
+    game already played never shows as upcoming.
+    finished, schedule: TEAM_ID, GAME_ID, GAME_DATE (dates normalized).
+    """
+    first = max(pd.Timestamp(data_day).normalize(), pd.Timestamp(today).normalize())
+    cols = ["TEAM_ID", "GAME_ID", "GAME_DATE"]
+    upcoming = schedule.loc[(schedule.GAME_DATE >= first) & ~schedule.GAME_ID.isin(finished.GAME_ID), cols]
+    return pd.concat([finished[cols], upcoming]).drop_duplicates(["TEAM_ID", "GAME_ID"]), first
+
+
 def upcoming_rows(player_games: pd.DataFrame, schedule: pd.DataFrame, priors: pd.DataFrame, teams: pd.Series,
                   today: pd.Timestamp, last_date: pd.Timestamp, min_games: int = 5) -> pd.DataFrame:
     """Feature rows for each rostered player's upcoming team games: the next `min_games`, and

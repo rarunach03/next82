@@ -295,6 +295,8 @@ def fill_gaps(rosters: pd.DataFrame, season: str = config.FORECAST_SEASON, today
             continue
         url, when, pdf = found
         facts, _ = parsed_report(pdf, url, when, rosters)
+        if facts.empty:
+            continue  # nobody listed that night (no games, or teams not submitted)
         history = pd.concat([history, facts.assign(report_day=facts.report_time.dt.normalize())])
         filled.append(day)
     if filled:
@@ -315,6 +317,13 @@ def refresh(rosters: pd.DataFrame, season: str = config.FORECAST_SEASON) -> pd.D
         return None
     url, when, pdf = latest
     facts, log = parsed_report(pdf, url, when, rosters)
+    if facts.empty:
+        # On days without games (Thanksgiving, the All-Star break) the latest report can
+        # list only the next day's games with every team "NOT YET SUBMITTED": nobody is
+        # listed yet, so keep the last real report rather than replacing it with nothing.
+        print(f"Injury report {when:%Y-%m-%d %I:%M %p} ET lists no players yet (teams not submitted); "
+              f"keeping the previous report ({url})")
+        return None
     current_path, log_path = paths(season)
     current_path.parent.mkdir(parents=True, exist_ok=True)
     facts.to_parquet(current_path, index=False)

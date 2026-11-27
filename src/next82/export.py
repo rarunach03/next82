@@ -9,6 +9,7 @@ Usage:
 """
 import json
 import math
+import os
 import shutil
 import unicodedata
 from datetime import datetime, timezone
@@ -213,8 +214,12 @@ def write_game_beta(forecasts: pd.DataFrame, rosters: pd.DataFrame | None, today
         return False
     player_games, team_games = logs
     player_games = player_games.assign(GAME_DATE=game_level.to_date(player_games.GAME_DATE))
-    sched = pd.concat([team_games[["TEAM_ID", "GAME_ID", "GAME_DATE"]], schedule[["TEAM_ID", "GAME_ID", "GAME_DATE"]]])
-    sched = sched.assign(GAME_DATE=game_level.to_date(sched.GAME_DATE)).drop_duplicates(["TEAM_ID", "GAME_ID"])
+    finished = team_games.assign(GAME_DATE=game_level.to_date(team_games.GAME_DATE))
+    schedule = schedule.assign(GAME_DATE=game_level.to_date(schedule.GAME_DATE))
+    # The calendar day in Eastern time: if the stats are a day or two old, games since then
+    # have been played (we just don't know by whom), so they aren't "upcoming".
+    now_day = pd.Timestamp(os.environ.get("REFRESH_TODAY") or datetime.now(injuries.EASTERN).date()).normalize()
+    sched, today = game_level.live_schedule(finished, schedule, today, now_day)
     rows = game_level.upcoming_rows(player_games, sched, game_level.priors_from_forecasts(load_forecasts()),
                                     rosters.set_index("PLAYER_ID").TEAM_ID, today, game_level.week_end(today))
     if rows.empty:

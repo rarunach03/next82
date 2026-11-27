@@ -127,6 +127,14 @@ def select(players: pd.DataFrame, news: pd.DataFrame, state: dict, today: pd.Tim
 
 # ---------------------------------------------------------------- Claude Code
 
+
+
+def never_searched(reply: str) -> bool:
+    """Claude Code failed before doing any work: a rejected or expired token, an API
+    error, or a crash. (A timeout or budget stop did search, so it counts as a run.)"""
+    return ("Failed to authenticate" in reply or "API Error" in reply or "OAuth" in reply
+            or reply.startswith("claude exited"))
+
 # The standalone CLI from Anthropic's native installer (https://claude.ai/install.sh).
 STANDALONE_CLAUDE = Path.home() / ".local" / "bin" / "claude"
 
@@ -349,7 +357,13 @@ def main(argv=None):
         if edited is None:
             print("News search failed: no edited file")
             raise SystemExit(1)
-        valid, problems = validate(changed_rows(news, edited), todo, today)
+        changed = changed_rows(news, edited)
+        if changed.empty and never_searched(reply):
+            # Claude Code didn't run (bad token, API error, crash): don't record a search
+            # that never happened, so the next refresh (here or on the Mac) tries again.
+            print("News search failed before searching; not recorded as a run, so it retries next refresh")
+            raise SystemExit(1)
+        valid, problems = validate(changed, todo, today)
         for line in problems:
             print(f"News search: {line}")
         merged, lines = merge(news, valid)

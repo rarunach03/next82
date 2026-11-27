@@ -8,8 +8,10 @@ name: refresh site data
 #
 # Runs when the Mac pushes stats or someone pushes news timelines or manual overrides,
 # twice a day on a schedule (so injuries stay current even when the Mac is off), and by
-# hand from the Actions tab. If any step fails the run fails (GitHub emails the owner)
-# and nothing is committed: the site keeps the last good data.
+# hand from the Actions tab. If the rebuild or its checks fail, the run fails (GitHub
+# emails the owner) and nothing is committed: the site keeps the last good data. An
+# unreadable injury report still lets the rebuild run (then fails the run at the end);
+# a failed news search is only a warning.
 on:
   schedule:
     - cron: "20 10 * * *"   # 5:20 am Eastern (6:20 in summer): after the night's games
@@ -63,12 +65,24 @@ jobs:
           .venv/bin/pip install --quiet -r requirements.txt
           .venv/bin/pip install --quiet --no-deps -e .
 
+      # If the report can't be read, the rebuild still runs with the last good report (so
+      # the Mac's new stats are published), and the run is marked failed at the end.
       - name: Read the injury report
-        run: .venv/bin/python -m next82.data --current --injuries-only
+        id: injuries
+        continue-on-error: true
+        run: |
+          .venv/bin/python -m next82.data --current --injuries-only || {
+            # Put back the last good report files so nothing half-written is committed.
+            git checkout -- data/raw/current_season/injuries_*.parquet data/raw/current_season/injury_log_*.parquet
+            exit 1
+          }
 
+      # Never stops the refresh: a failure (an invalid or expired token shows as "401") is a
+      # warning, and the search isn't recorded as run, so it's retried next time.
       - name: Search the news for injury timelines
         id: news
         if: inputs.news != 'skip'
+        continue-on-error: true
         env:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           FORCE: ${{ inputs.news == 'force' && '--force' || '' }}
@@ -77,9 +91,13 @@ jobs:
             echo "No CLAUDE_CODE_OAUTH_TOKEN secret: the Mac runs the news search"
             exit 0
           fi
-          npm install --global --silent @anthropic-ai/claude-code
-          # Like the Mac: a failed or timed-out search doesn't stop the refresh, but it's flagged.
-          ./scripts/news_timelines.sh $FORCE || echo "::warning::News search failed; the refresh continued without it"
+          if ! npm install --global --silent @anthropic-ai/claude-code; then
+            echo "::warning::Couldn't install Claude Code; skipped the news search"
+            exit 0
+          fi
+          if ! ./scripts/news_timelines.sh $FORCE; then
+            echo "::warning::News search failed (see the log above; '401 OAuth access token is invalid' means CLAUDE_CODE_OAUTH_TOKEN needs replacing). The rest of the refresh carried on."
+          fi
 
       - name: Rebuild the site data
         run: .venv/bin/python -m next82.export
@@ -115,6 +133,12 @@ jobs:
             sleep 20
           done
           echo "::error::Couldn't push the refreshed data"
+          exit 1
+
+      - name: Fail the run if the injury report couldn't be read
+        if: steps.injuries.outcome == 'failure'
+        run: |
+          echo "::error::Reading the injury report failed (see that step's log). The site was rebuilt with the last good report."
           exit 1
 
       # Scheduled workflows stop after 60 days without repository activity (the off-season).

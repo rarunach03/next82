@@ -202,3 +202,23 @@ def test_split_keeps_test_seasons_out():
     assert set(test.SEASON) == set(gl.TEST_SEASONS)
     assert not set(train.SEASON) & set(gl.TEST_SEASONS) and set(val.SEASON) == {gl.VALIDATION_SEASON}
     assert len(train) + len(val) + len(test) == len(rows)
+
+
+def test_live_schedule_drops_unfinished_past_games_and_played_ones():
+    from next82.game_level import live_schedule
+    d = pd.Timestamp
+    finished = pd.DataFrame({"TEAM_ID": [1, 2], "GAME_ID": ["g1", "g1"], "GAME_DATE": [d("2026-11-24")] * 2})
+    schedule = pd.DataFrame({
+        "TEAM_ID": [1, 2, 1, 2, 1, 2, 1, 2],
+        "GAME_ID": ["g1", "g1", "g2", "g2", "g3", "g3", "g4", "g4"],
+        "GAME_DATE": [d("2026-11-24")] * 2 + [d("2026-11-25")] * 2 + [d("2026-11-26")] * 2 + [d("2026-11-28")] * 2})
+    # Nothing final yet on the 25th: its games are still upcoming.
+    sched, first = live_schedule(finished, schedule, data_day=d("2026-11-25"), today=d("2026-11-25"))
+    assert first == d("2026-11-25") and set(sched.GAME_ID) == {"g1", "g2", "g3", "g4"}
+    # Stats fetched mid-evening on the 25th, after another game there finished (so the data
+    # day is the 26th) while g2 is in progress: g2 is neither history nor upcoming.
+    sched, first = live_schedule(finished, schedule, data_day=d("2026-11-26"), today=d("2026-11-25"))
+    assert first == d("2026-11-26") and set(sched.GAME_ID) == {"g1", "g3", "g4"}
+    # Stats two days old: games since then were played, so upcoming starts today.
+    sched, first = live_schedule(finished, schedule, data_day=d("2026-11-25"), today=d("2026-11-27"))
+    assert first == d("2026-11-27") and set(sched.GAME_ID) == {"g1", "g4"}

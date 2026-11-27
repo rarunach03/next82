@@ -1,4 +1,5 @@
 import pandas as pd
+import pytest
 
 from next82 import auto_overrides, news
 
@@ -126,3 +127,30 @@ def test_prefers_the_standalone_cli_then_falls_back(tmp_path, monkeypatch):
     monkeypatch.setattr(news.glob, "glob", lambda pattern: ["/x/anthropic.claude-code-2.1.9-darwin-arm64/claude",
                                                              "/x/anthropic.claude-code-2.1.10-darwin-arm64/claude"])
     assert news.claude_binary() == "/x/anthropic.claude-code-2.1.10-darwin-arm64/claude"
+
+
+def test_a_search_that_never_ran_is_not_recorded(tmp_path, monkeypatch):
+    state = tmp_path / "state.json"
+    monkeypatch.setattr(news, "STATE_PATH", state)
+    players = pd.DataFrame({"player_id": [1], "player_name": ["A"], "status": ["Out"], "reason": ["x"]})
+    monkeypatch.setattr(news, "players_to_check", lambda today: players)
+    monkeypatch.setattr(news, "serious_out", lambda p: set())
+    monkeypatch.setattr(news, "select", lambda p, n, s, t: players)
+    original = news.auto_overrides.load_news()
+    monkeypatch.setattr(news, "run_claude", lambda *a: (
+        original, "stopped early (success): Failed to authenticate. API Error: 401 OAuth access token is invalid."))
+    with pytest.raises(SystemExit):
+        news.main(["--force"])
+    assert not state.exists()
+
+    # A timeout that searched but found nothing still counts as a run.
+    monkeypatch.setattr(news, "run_claude", lambda *a: (original, "stopped early: timed out after 25 minutes"))
+    news.main(["--force"])
+    assert state.exists()
+
+
+def test_never_searched():
+    assert news.never_searched("stopped early (success): Failed to authenticate. API Error: 401 OAuth access token is invalid.")
+    assert news.never_searched("claude exited with 1: boom")
+    assert not news.never_searched("stopped early (error_max_budget_usd): added 3 rows")
+    assert not news.never_searched("Added 2 rows")

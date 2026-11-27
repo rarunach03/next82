@@ -108,3 +108,17 @@ def test_fill_gaps_adds_each_missed_days_final_report(tmp_path, monkeypatch):
     assert [f"{d:%m-%d}" for d in filled] == ["10-27"]          # no report found for the 28th: left out
     saved = pd.read_parquet(log_path)
     assert [f"{d:%m-%d}" for d in saved.report_day] == ["10-26", "10-27", "10-29"]
+
+
+def test_a_report_listing_nobody_keeps_the_previous_one(tmp_path, monkeypatch):
+    """Thanksgiving: the latest report lists only the next day's games, every team 'NOT YET SUBMITTED'."""
+    now, log = tmp_path / "now.parquet", tmp_path / "log.parquet"
+    before = pd.DataFrame({"PLAYER_ID": [1.0], "status": ["Out"], "report_day": [pd.Timestamp("2026-11-25")]})
+    before.to_parquet(now, index=False)
+    before.to_parquet(log, index=False)
+    monkeypatch.setattr(injuries, "paths", lambda season=None: (now, log))
+    monkeypatch.setattr(injuries, "fill_gaps", lambda rosters, season=None: [])
+    monkeypatch.setattr(injuries, "fetch_latest", lambda: ("url", datetime(2026, 11, 26, 6, 30), b"%PDF"))
+    monkeypatch.setattr(injuries, "parsed_report", lambda pdf, url, when, rosters: (pd.DataFrame(columns=before.columns), []))
+    assert injuries.refresh(pd.DataFrame()) is None
+    assert pd.read_parquet(now).equals(before) and pd.read_parquet(log).equals(before)

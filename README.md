@@ -150,8 +150,12 @@ values including rookies, back-to-backs, the stash list, the game-by-game beta a
 checks the result (`scripts/check_site_data.py` and the full pytest suite), and commits the site
 data only if something changed. It runs when the Mac pushes stats, when someone pushes
 `data/news_timelines.csv` or `data/overrides.csv`, at 5:20 am and 4:40 pm Eastern (so injuries stay
-current while the Mac is off), and by hand from the Actions tab. If any step fails, the run fails
-(GitHub emails the owner) and nothing is committed: the site keeps the last good data. Each run
+current while the Mac is off), and by hand from the Actions tab. If the rebuild or its checks fail,
+the run fails (GitHub emails the owner) and nothing is committed: the site keeps the last good data.
+If only the injury report can't be read, the site is still rebuilt with the last good report (so
+new stats go out) and the run is marked failed. A failed news search (e.g. an expired token, shown
+as "401") is only a warning, and isn't recorded as a run, so it's retried. A report that lists
+nobody yet (on days without games every team can be "not yet submitted") keeps the previous one. Each run
 re-enables the workflow, so GitHub's 60-day inactivity rule can't switch the schedule off in the
 off-season.
 
